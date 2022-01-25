@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 
 from sys import argv, stdout
-from threading import Thread
+from threading import Thread, Event
 import GameData
 import socket
 from constants import *
 from my_sol import Agent
 import os
+
+agent = Agent()
+
+getInput = Event()
+getInput.set()
 
 if len(argv) == 2:
     playerName = argv[1]
@@ -35,9 +40,11 @@ hintState = ("", "")
 def manageInput():
     global run
     global status
+    global agent
+    global getInput
 
     while run:
-        command = input()
+        command = agent.getCommand(status, getInput)
         # Choose data to send
         if command == "exit":
             run = False
@@ -120,6 +127,10 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
         if type(data) is GameData.ServerGameStateData:
             dataOk = True
+
+            if agent.empty():
+                agent.set_num_player(data)
+                
             print("Current player: " + data.currentPlayer)
             print("Player hands: ")
             for p in data.players:
@@ -173,3 +184,4 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Unknown or unimplemented data type: " +  str(type(data)))
         print("[" + playerName + " - " + status + "]: ", end="")
         stdout.flush()
+        getInput.set()

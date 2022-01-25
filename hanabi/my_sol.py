@@ -1,7 +1,7 @@
-from importlib_metadata import re
 import networkx as nx
 import GameData
 from collections import Counter
+from threading import Event
 
 
 clustering = 5
@@ -47,7 +47,7 @@ def find_nearest_state(state:State, states_table)-> State:
 
 class Agent:
 
-    def __init__(self, data) -> None:
+    def __init__(self) -> None:
 
         self.local_Q_table = dict() # np.array((0, N_ACTIONS))
         # self.actions_table = np.array((0, self.N_ACTIONS))
@@ -55,19 +55,25 @@ class Agent:
         self.reward_table = dict() # np.array((len(self.q_table), self.N_ACTIONS))
         self.state_graph = nx.DiGraph()
         
-    
+        self.agent_game_states = ["Lobby","Game","Learning"]
+        self.agent_current_game_state = "Lobby"
         self.values_occurences = [3,2,2,2,1]
         self.color_occurrences = 10
         self.num_of_colors = 5
-        self.num_players = len(data.players)
-
-        self.my_cards_info = [{"color": None, "value": None, "position":None } for _ in range(5 if self.num_players>=4 else 4)]
+        self.num_players=None
+        self.my_cards_info=None
 
         #======================
         self.old_state = None
         self.new_state = None
         #======================
 
+    def empty(self):
+        return not self.num_players
+    
+    def set_num_player(self, data):
+        self.num_players = len(data.players)
+        self.my_cards_info = [{"color": None, "value": None, "position":None } for _ in range(5 if self.num_players>=4 else 4)]
 
     def learn(self, data: GameData.ServerGameStateData, learning=True) -> None:
         # TODO: Capire come gestire exploitation and exploration
@@ -84,6 +90,27 @@ class Agent:
         # return action
         return 
 
+    def getCommand(self, status, takeInput:Event):
+
+        res = ""
+        takeInput.wait()
+
+        if self.agent_current_game_state == "Lobby" and status == "Lobby":
+            self.agent_current_game_state == "Game"
+            res = "ready"
+
+        if self.agent_current_game_state == "Game" and status == "Game":
+            self.agent_current_game_state == "Learning"
+            res = "show"
+        
+
+        if self.agent_current_game_state == "Learning" and status == "Game":
+            res = self.learn()
+
+        takeInput.clear()
+
+        return res
+         
 
     def evaluate_state(self, data:GameData.ServerGameStateData)-> State:
             """
