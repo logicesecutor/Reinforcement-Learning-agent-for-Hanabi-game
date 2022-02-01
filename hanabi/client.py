@@ -5,7 +5,6 @@ from threading import Thread
 import GameData
 import socket
 from constants import *
-from my_sol import Agent
 import os
 
 if len(argv) == 2:

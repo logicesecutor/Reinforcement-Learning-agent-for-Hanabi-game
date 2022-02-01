@@ -86,6 +86,17 @@ class ClientGetGameStateRequest(ClientToServerData):
         action = "Show cards request"
         super().__init__(sender, action)
 
+#===========================================================
+class ClientGetGameStateUpdateRequest(ClientToServerData):
+    '''
+    Used to retrieve the game state.
+    '''
+    def __init__(self, sender, players_action) -> None:
+        action = "Show cards request"
+        self.players_action = players_action
+        super().__init__(sender, action)
+#===========================================================
+
 class ClientPlayerDiscardCardRequest(ClientToServerData):
     '''
     Used to discard a card.
@@ -192,6 +203,32 @@ class ServerGameStateData(ServerToClientData):
         self.tableCards = table
         self.discardPile = discard
         super().__init__(action)
+
+
+#====================================================
+class ServerGameStateDataUpdate(ServerToClientData):
+    '''
+    Shows the game state to the players.
+    currentPlayer: the name of the player that should play right now.
+    players: the list of players in turn order.
+    usedNoteTokens: used blue (note) tokens. 0 is the minimum, 8 is the maximum.
+    usedStormTokens: used red (storm) tokens. 0 is the minimum, 3 is the maximum. At 3 the game is over.
+    tableCards: shows the cards that are currently being played (forming the current firework).
+    discardPile: shows the discard pile.
+    NOTE: params might get added on request, if the game allows for it.
+    '''
+    def __init__(self, currentPlayer: str, players: list, players_action:str, usedNoteTokens: int, usedStormTokens: int, table: list, discard: list) -> None:
+        action = "Show cards response"
+        self.currentPlayer = currentPlayer
+        self.players = players
+        self.usedNoteTokens = usedNoteTokens
+        self.usedStormTokens = usedStormTokens
+        self.tableCards = table
+        self.discardPile = discard
+        self.players_action = players_action
+        super().__init__(action)
+
+#====================================================
 
 
 class ServerActionValid(ServerToClientData):

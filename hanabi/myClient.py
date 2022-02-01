@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 
 from sys import argv, stdout
-from threading import Thread, Event
+from threading import Thread, Lock, Event
+
 import GameData
 import socket
 from constants import *
-from my_sol import Agent
+from agent import Agent
 import os
 
 agent = Agent()
-
-getInput = Event()
-getInput.set()
+getInput_lock = Lock()
+getInput_event = Event()
+getInput_event.set()
 
 if len(argv) == 2:
     playerName = argv[1]
@@ -41,10 +42,17 @@ def manageInput():
     global run
     global status
     global agent
-    global getInput
+    global getInput_lock
+    global getInput_event
 
     while run:
-        command = agent.getCommand(status, getInput)
+
+        getInput_event.wait()
+
+        command = agent.getCommand(status)
+
+        getInput_event.clear()
+
         # Choose data to send
         if command == "exit":
             run = False
@@ -58,16 +66,20 @@ def manageInput():
                 cardStr = command.split(" ")
                 cardOrder = int(cardStr[1])
                 s.send(GameData.ClientPlayerDiscardCardRequest(playerName, cardOrder).serialize())
+                s.send(GameData.ClientGetGameStateUpdateRequest(playerName, "discard").serialize())
             except:
                 print("Maybe you wanted to type 'discard <num>'?")
+                getInput_event.set()
                 continue
         elif command.split(" ")[0] == "play" and status == statuses[1]:
             try:
                 cardStr = command.split(" ")
                 cardOrder = int(cardStr[1])
                 s.send(GameData.ClientPlayerPlayCardRequest(playerName, cardOrder).serialize())
+                s.send(GameData.ClientGetGameStateUpdateRequest(playerName, "play").serialize())
             except:
                 print("Maybe you wanted to type 'play <num>'?")
+                getInput_event.set()
                 continue
         elif command.split(" ")[0] == "hint" and status == statuses[1]:
             try:
@@ -87,13 +99,17 @@ def manageInput():
                         print("Error: card color can only be green, red, blue, yellow or white")
                         continue
                 s.send(GameData.ClientHintData(playerName, destination, t, value).serialize())
+                s.send(GameData.ClientGetGameStateUpdateRequest(playerName, "hint").serialize())
             except:
                 print("Maybe you wanted to type 'hint <type> <destinatary> <value>'?")
+                getInput_event.set()
                 continue
         elif command == "":
             print("[" + playerName + " - " + status + "]: ", end="")
+            getInput_event.set()
         else:
             print("Unknown command: " + command)
+            getInput_event.set()
             continue
         stdout.flush()
 
@@ -110,6 +126,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     while run:
         dataOk = False
         data = s.recv(DATASIZE)
+
         if not data:
             continue
         data = GameData.GameData.deserialize(data)
@@ -124,12 +141,11 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.send(GameData.ClientPlayerReadyData(playerName).serialize())
             status = statuses[1]
 
-
+        # when you write show
         if type(data) is GameData.ServerGameStateData:
             dataOk = True
 
-            if agent.empty():
-                agent.set_num_player(data)
+            agent.set_data(data)
                 
             print("Current player: " + data.currentPlayer)
             print("Player hands: ")
@@ -146,6 +162,14 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 print("\t" + c.toClientString())            
             print("Note tokens used: " + str(data.usedNoteTokens) + "/8")
             print("Storm tokens used: " + str(data.usedStormTokens) + "/3")
+
+        #=========================================================================
+        if type(data) is GameData.ServerGameStateDataUpdate:
+            agent.update_data(data)
+            agent.update_players_action(data.players_action)
+            continue
+
+        #=========================================================================
 
 
         if type(data) is GameData.ServerActionInvalid:
@@ -165,6 +189,11 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("OH NO! The Gods are unhappy with you!")
         if type(data) is GameData.ServerHintData:
             dataOk = True
+
+            #==========================================
+            agent.update_other_players_knowledge(data)
+            #==========================================
+            
             print("Hint type: " + data.type)
             print("Player " + data.destination + " cards with value " + str(data.value) + " are:")
             for i in data.positions:
@@ -184,4 +213,5 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Unknown or unimplemented data type: " +  str(type(data)))
         print("[" + playerName + " - " + status + "]: ", end="")
         stdout.flush()
-        getInput.set()
+
+        getInput_event.set()

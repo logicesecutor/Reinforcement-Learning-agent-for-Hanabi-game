@@ -1,4 +1,6 @@
 import os
+
+from numpy import single
 import GameData
 import socket
 from game import Game
@@ -7,6 +9,7 @@ import threading
 from constants import *
 import logging
 import sys
+
 
 mutex = threading.Lock()
 # SERVER
@@ -23,7 +26,6 @@ status = statuses[0]
 
 commandQueue = {}
 numPlayers = 2
-
 
 def manageConnection(conn: socket, addr):
     global status
@@ -105,7 +107,12 @@ def manageConnection(conn: socket, addr):
                     singleData, multipleData = game.satisfyRequest(
                         data, playerName)
                     if singleData is not None:
-                        conn.send(singleData.serialize())
+                        if type(singleData) is list:
+                            for data in singleData:
+                                conn.send(data.serialize())
+                        else:
+                            conn.send(singleData.serialize())
+
                     if multipleData is not None:
                         for id in playerConnections:
                             playerConnections[id][0].send(
