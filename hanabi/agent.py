@@ -1,6 +1,5 @@
+from copy import deepcopy 
 import networkx as nx
-from pyrsistent import discard
-from torch import save
 import GameData
 from collections import Counter
 from random import random, randrange
@@ -58,13 +57,13 @@ class Agent:
         #======================
         self.num_players = None
         self.my_cards_info = None
-        self.other_players_cards_info = None
+        self.other_players_cards_info = dict()
+        self.myturn = False
 
         self.probable_hand = []
 
         self.data = None
         self.name = None
-        self.weightFunctionValues = None
 
         #======================
         self.old_state = None
@@ -101,16 +100,20 @@ class Agent:
                 return -10
 
         elif action == "discard":
-            if data.usedNoteTokens == 8:
+            if "bad" in action:
                 return -10
             elif self.count_played_cards(data) == 50:
                 return self.table_score(data)
             
-        elif action == "play":
-            if data.usedStormTokens == 3:
+        elif "play" in action:
+            if "bad" in action:
                 return -10 
+            #if data.usedStormTokens == 3:
+                
             elif self.table_score(data) == 25:
                 return 100
+            else:
+                return self.table_score(data)
                     
         return 0
 
@@ -123,35 +126,63 @@ class Agent:
 
         return len(data.discardPile) + accum
 
-    def set_data(self, data:GameData.ServerGameStateData):
+    def set_data(self, data:GameData.ServerGameStateData, playerName):
         if not self.num_players or self.num_players != len(data.players): 
             self.data = data
             self.num_players = len(data.players)
-            self.name = data.currentPlayer
+            self.name = playerName
 
-            self.weightFunctionValues = [1/self.num_players for _ in range(self.num_players)]
-            self.my_cards_info = [{"color": None, "value": None, "position":None,"age":0 } for _ in range(5 if self.num_players>=4 else 4)]
-            for player in self.num_players:
+            self.myturn = True if data.currentPlayer == self.name else False
+
+            self.my_cards_info = [{"color": None, "value": None, "position":None,"age":0 } for _ in range(5)]#if self.num_players>=4 else 4)]
+            for player in self.data.players:
                 if player.name != self.name:
-                    self.other_players_cards_info[player] = [{"color": None, "value": None, "position":None } for _ in range(5 if self.num_players>=4 else 4)]
+                    self.other_players_cards_info[player.name] = [{"color": None, "value": None, "position":None } for _ in range(5)]# if self.num_players>=4 else 4)]
+
 
     def update_data(self, data):
         self.data = data
 
+        if data.currentPlayer == self.name and data.players_action == "discard":
+            self.my_cards_info.pop(data.index)
+            if len(data.tableCards)>0:
+                self.my_cards_info.append({"color": None, "value": None, "position":None,"age":0 })
+
+
     def update_players_action(self, other_player_action: str):
 
-        action = self.actions[other_player_action]
+        if "play" in other_player_action:
+            action = 0
+        elif "hint" in other_player_action:
+            action = 1
+        elif "discard" in other_player_action:
+            action = 2
+        else:
+            assert False
+        # action = self.actions[other_player_action]
         assert type(action) is int
 
-        self.total_reward = self.compute_reward(self.data, action)
+        self.total_reward = self.compute_reward(self.data, other_player_action)
         self.players_actions.append(action)
 
 
+    def update_my_cards_knowledge(self, data):
+        for position in data.positions:
+            self.my_cards_info[position]["position"] = position
+
+            if data.type == "color":
+                self.my_cards_info[position]["color"] = data.value
+            elif data.type == "value":
+                self.my_cards_info[position]["value"] = data.value
+
     def update_other_players_knowledge(self, data):
-        if data.type == "color":
-            self.other_players_cards_info[data.destination][data.position]["color"] = data.value
-        elif data.type == "value":
-            self.other_players_cards_info[data.destination][data.position]["value"] = data.value
+        for position in data.positions:
+            self.other_players_cards_info[data.destination][position]["position"] = position
+
+            if data.type == "color":
+                self.other_players_cards_info[data.destination][position]["color"] = data.value
+            elif data.type == "value":
+                self.other_players_cards_info[data.destination][position]["value"] = data.value
 
     def learn(self) -> str:
 
@@ -162,7 +193,7 @@ class Agent:
         if self.players_actions:
             assert len(self.players_actions) == self.num_players
 
-            self.reward_table[self.old_state][self.players_actions] = self.total_reward
+            self.reward_table[self.old_state][tuple(self.players_actions)] = self.total_reward
         #========================================
 
         
@@ -199,6 +230,9 @@ class Agent:
 
 
     def ageMyCardsBelief(self):
+        """
+            In order to discard the oldest card in the hand i need to increment the age at each 
+        """
         for card in self.my_cards_info:
             card["age"] += 1
 
@@ -206,6 +240,7 @@ class Agent:
     def buildReadableAction(self, action):
         assert type(action) is int
 
+        return self.UsefullHintToAnyone()
         if action == 0:
             return self.playCard()
             
@@ -218,13 +253,13 @@ class Agent:
         else:
             print("Not valid action available")
     
-    def playCard(self, treshold=0.6):
+    def playCard(self):
         """ Play the card with the highest probability"""
         for card in self.probable_hand:
             if self.isPlayable(card["value"], card["color"]):
                 return "play "+card["position"] 
         
-        return "play "+randrange(len(self.probable_hand))
+        return "play "+str(randrange(len(self.my_cards_info)))
 
     def isPlayable(self, value, card_color) -> bool:
         for color_pile, cards in self.data.tableCards.items():
@@ -241,39 +276,65 @@ class Agent:
         max_value = 0
 
         for p in self.data.players:
+            if p.name == self.name: continue
+
             for i, card in enumerate(p.hand):
                 if self.isPlayable(card.value, card.color):
-                    if not self.other_players_cards_info[p.name][i].color:
+                    if not self.other_players_cards_info[p.name][i]["color"]:
                         if card.value > max_value: 
                             max_value = card.value
                             action = "color"
                             saved_player = p.name
                             saved_value = card.color
 
-                    elif not self.other_players_cards_info[p.name][i].value:
+                    elif not self.other_players_cards_info[p.name][i]["value"]:
                         if card.value > max_value: 
                             max_value = card.value
                             action = "value"
                             saved_player = p.name
                             saved_value = card.value
         
-        assert saved_player is not None 
-        assert saved_value is not None
+        # That mean that:
+        # - the all players have all the info about their cards (very unlikely)
+        # - the all players does not have playable cards in their hands
+        # So I give the hint for the card which have the max value
+        if max_value == 0 :
+            for p in self.data.players:
+                if p.name == self.name: continue
 
-        return "hint "+action+" "+saved_player+" "+saved_value
+                for i, card in enumerate(p.hand):
+                    if not self.other_players_cards_info[p.name][i]["color"]:
+                        if card.value > max_value: 
+                            max_value = card.value
+                            action = "color"
+                            saved_player = p.name
+                            saved_value = card.color
+
+                    elif not self.other_players_cards_info[p.name][i]["value"]:
+                        if card.value > max_value: 
+                            max_value = card.value
+                            action = "value"
+                            saved_player = p.name
+                            saved_value = card.value
+        
+
+        return "hint "+action+" "+saved_player+" "+str(saved_value)
                
 
     def discardOldest(self):
         res = max(self.my_cards_info, key=lambda x:x["age"])
+        if not res["position"]:
+            return "discard "+str(randrange(len(self.my_cards_info)))
+
         return "discard " + res["position"]
             
 
     def update_Q_table_Previous(self, new_state, old_state, set_of_action):
         
-        if old_state is None:
+        if len(set_of_action) < self.num_players:
             return 
 
-        current_q_value = 0 if not set_of_action or not self.Q_table[old_state][set_of_action] else self.Q_table[old_state][set_of_action]  #self.Q_table[old_state][set_of_action] or 0
+        current_q_value = 0 if not set_of_action or not set_of_action in self.Q_table[old_state].keys() else self.Q_table[old_state][set_of_action]  #self.Q_table[old_state][set_of_action] or 0
 
         R = self.reward_table[old_state][set_of_action]
 
@@ -317,7 +378,7 @@ class Agent:
             res = "show"
 
         elif self.agent_current_game_state == "Learning" and status == "Game":
-            self.agent_current_game_state = "Game"
+            # self.agent_current_game_state = "Game"
             res = self.learn()
 
         return res
@@ -339,8 +400,14 @@ class Agent:
 
 
     def evaluate_my_state(self, data:GameData.ServerGameStateData):
-        
-        self.probable_hand = []     
+        """
+            Make an estimation of a probable hand based on the info that I have.
+            Than I evaluate my hand as the maximum score that i can make if i play all the card.
+            The idea behind is that different cards can have the same total score and I want to 
+            make similar choice for similar scores. Similar state leads to similar actions
+        """
+        self.probable_hand = [] 
+        my_card_info_copy = deepcopy(self.my_cards_info)
 
         # Genero il mazzo di carte piu' probabile per poi valutarlo
         for i, my_card in enumerate(self.my_cards_info):
@@ -350,7 +417,8 @@ class Agent:
             
             # Se so solo il valore o il colore metto nel mazzo la carta con piu' probabilita' di uscire
             if not my_card["color"] and my_card["value"]:
-                color, probability = self.get_color_with_max_probability_given_value(my_card["value"])
+                color, probability = self.get_color_with_max_probability_given_value(self.data, my_card["value"], my_card_info_copy)
+                my_card_info_copy[i]["color"] = color
                 self.probable_hand.append({
                     "color": color, 
                     "value": my_card["value"], 
@@ -358,7 +426,8 @@ class Agent:
                     "position":i })
 
             elif my_card["color"] and not my_card["value"]:
-                value, probability = self.get_value_with_max_probability_given_color(my_card["color"])
+                value, probability = self.get_value_with_max_probability_given_color(self.data, my_card["color"], my_card_info_copy)
+                my_card_info_copy[i]["value"] = value
                 self.probable_hand.append({
                     "color": my_card["color"], 
                     "value": value, 
@@ -378,49 +447,31 @@ class Agent:
 
 
         # Current player-hand evaluation
-        # TODO: Creare una funzione che valuta delle carte in base alle carte sul tavolo
-        s = []
-        # Faccio un sorting delle carte per valore
-        sorted_hand = sorted([(elem.value,elem.color) for elem in self.probable_hand], key=lambda x: x[0])
+        s = 0
+        # Sorting the probable hand by cards value 
+        sorted_hand = sorted([(elem["value"], elem["color"]) for elem in self.probable_hand], key=lambda x: x[0])
         for color, cards in data.tableCards.items():
             
             max_val = len(cards)
 
             for p_value, p_color in sorted_hand:
-                if color == p_color:
+                if color != p_color:
                     continue
                 if max_val + 1 == p_value:
                     max_val = p_value
-
-            # Moltiplico il valore probabile per la probabilita' di accadere
-            s.append(max_val)  #* saved_prob
+            s += max_val
+            # An IDEA can be to Multiply the max value for the probability of having this card but the introduction of
+            # real number leads to a solution space too big to be evaluated
+        # s.append(max_val)  #* saved_prob
         
-        return s#Counter(probable_hand)
-
-    def compute_evaluation_of_player_hand(p_hand, data):
-        res = []
-        sorted_hand = sorted([(elem.value,elem.color) for elem in p_hand], key=lambda x: x[0])
-        for color, cards in data.tableCards.items():
-            
-            max_val = len(cards)
-
-            for p_value, p_color in sorted_hand:
-                if color == p_color:
-                    continue
-                if max_val + 1 == p_value:
-                    max_val = p_value
-
-            # Sommo il valore probabile moltiplicato per la probabilita' di accadere
-            res.append(max_val)  #* saved_prob
-
-        return res
+        return [s]
 
 
     def evaluate_other_players_state(self, data:GameData.ServerGameStateData, mode="score", discounted=False):
         """ 
             Two possible modes:
             - card_type: we use as evaluator the state number and the type of card that each player have -> dict of information 
-            - scores: we use the max score that the player could perform with his hand in that specific time -> list of scores
+            - score: we use the max score that the player could perform with his hand in that specific time -> list of scores
         """
 
         if mode=="score":
@@ -460,31 +511,37 @@ class Agent:
         return state
 
 
-    def get_numCard_per_color(self, data:GameData.ServerGameStateData, color):
+    def get_numCard_per_color(self, data:GameData.ServerGameStateData, color, my_card_info_copy):
         num_counter = 0
         
-        for name in data.players:
-            for card in data.players[name]:
+        # All the card of that color in the other players hand
+        for player in data.players:
+            if player.name == self.name: continue
+            for card in player.hand:
                 if card.color == color:
                     num_counter += 1
-        
+
+        # All the card of that color in the discard pile
         for card in data.discardPile:
             if card.color == color:
                     num_counter += 1
         
-        for card in self.my_cards_info:
-            if card["color"] == color:
-                num_counter += 1
+        # All the card of that color in my hand
+        for card in my_card_info_copy:
+            if card["color"] is not None:
+                if card["color"] == color:
+                    num_counter += 1
 
-        return self.color_occurrences - num_counter # Carte nel mazzo di colore "color"
+        return self.color_occurrences - num_counter # Cards in the deck with color == "color"
 
 
-    def get_numCard_per_value(self, data:GameData.ServerGameStateData, number):
+    def get_numCard_per_value(self, data:GameData.ServerGameStateData, number, my_card_info_copy):
 
         num_counter = 0
 
-        for name in data.players:
-            for card in data.players[name]:
+        for player in data.players:
+            if player.name == self.name: continue
+            for card in player.hand:
                 if card.value == number:
                     num_counter += 1
         
@@ -492,18 +549,20 @@ class Agent:
             if card.value == number:
                     num_counter += 1
         
-        for card in self.my_cards_info:
-            if card["value"] == number:
-                num_counter += 1
+        for card in my_card_info_copy:
+            if card["value"] is not None:
+                if card["value"] == number:
+                    num_counter += 1
 
-        return self.values_occurences[number-1] * 5 - num_counter  # Carte nel mazzo di valore "number"
+        return self.values_occurences[number-1] * 5 - num_counter  # Cards in the deck with value == "value"
 
 
-    def get_numCard_per_value_and_color(self, data:GameData.ServerGameStateData, number, color):
+    def get_numCard_per_value_and_color(self, data:GameData.ServerGameStateData, number, color, my_card_info_copy):
         num_counter = 0
         
-        for name in data.players:
-            for card in data.players[name]:
+        for player in data.players:
+            if player.name == self.name: continue
+            for card in player.hand:
                 if card.value == number and card.color == color:
                     num_counter += 1
         
@@ -511,16 +570,17 @@ class Agent:
             if card.value == number and card.color == color:
                     num_counter += 1
         
-        for card in self.my_cards_info:
-            if card["value"] == number and card["color"] == color:
-                num_counter += 1
+        for card in my_card_info_copy:
+            if card["value"] is not None and card["color"] is not None:
+                if card["value"] == number and card["color"] == color:
+                    num_counter += 1
         
 
         return self.values_occurences[number-1] - num_counter 
 
         
 
-    def get_value_with_max_probability_given_color(self, data, card_color):
+    def get_value_with_max_probability_given_color(self, data, card_color, my_card_info_copy):
         # Sapendo che e' rosso, probabilita' che sia un 1
         # Numero di 1 rossi nel mazzo / totale di carte rosse nel mazzo
         """
@@ -530,9 +590,9 @@ class Agent:
         card_prob = []
         for card_value in range(1,6):
 
-            den = self.get_numCard_per_color(data, card_color)
+            den = self.get_numCard_per_color(data, card_color, my_card_info_copy)
             if den != 0: 
-                num = self.get_numCard_per_value_and_color(data, card_value, card_color)
+                num = self.get_numCard_per_value_and_color(data, card_value, card_color, my_card_info_copy)
                 card_prob.append((card_value, num / den ))
                 continue
 
@@ -541,7 +601,7 @@ class Agent:
         return max(card_prob, key=lambda x:x[1])
 
 
-    def get_color_with_max_probability_given_value(self, data, card_value):
+    def get_color_with_max_probability_given_value(self, data, card_value, my_card_info_copy):
         # Sapendo che e' un 1, probabilita' che sia rosso
         # Numero di 1 rossi nel mazzo / totale di 1 nel mazzo
         """
@@ -551,9 +611,9 @@ class Agent:
         card_prob = []
         for card_color in ["red","green","blue","yellow","white"]:
      
-            den = self.get_numCard_per_value(data, card_value)
+            den = self.get_numCard_per_value(data, card_value, my_card_info_copy)
             if den != 0: 
-                num = self.get_numCard_per_value_and_color(data, card_value, card_color)
+                num = self.get_numCard_per_value_and_color(data, card_value, card_color, my_card_info_copy)
                 card_prob.append(tuple(card_color, num / den))
                 continue
 

@@ -14,6 +14,14 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "Python: Agent 2",
+            "type": "python",
+            "request": "launch",
+            "program": "./hanabi/myClient.py",
+            "args": ["Agent_2"],
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Python: server",
             "type": "python",
             "request": "launch",

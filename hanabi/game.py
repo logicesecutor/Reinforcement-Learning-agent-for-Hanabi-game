@@ -241,7 +241,7 @@ class Game(object):
         playerUpdateList = []
         for player in self.__players:
             currentPlayer, playerList = self.__getPlayersStatus(player.name)
-            playerUpdateList.append(GameData.ServerGameStateDataUpdate(currentPlayer, playerList, data.players_action, self.__noteTokens, self.__stormTokens, self.__tableCards, self.__discardPile))
+            playerUpdateList.append(GameData.ServerGameStateDataUpdate(currentPlayer, playerList, data.players_action, self.__noteTokens, self.__stormTokens, self.__tableCards, self.__discardPile, data.index))
 
         return (playerUpdateList, None)
     #==============================

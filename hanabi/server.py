@@ -107,9 +107,11 @@ def manageConnection(conn: socket, addr):
                     singleData, multipleData = game.satisfyRequest(
                         data, playerName)
                     if singleData is not None:
+
                         if type(singleData) is list:
-                            for data in singleData:
-                                conn.send(data.serialize())
+                            for i, id in enumerate(playerConnections):
+                                playerConnections[id][0].send(
+                                    singleData[i].serialize())
                         else:
                             conn.send(singleData.serialize())
 

@@ -91,9 +91,10 @@ class ClientGetGameStateUpdateRequest(ClientToServerData):
     '''
     Used to retrieve the game state.
     '''
-    def __init__(self, sender, players_action) -> None:
+    def __init__(self, sender, players_action, index=None) -> None:
         action = "Show cards request"
         self.players_action = players_action
+        self.index = index
         super().__init__(sender, action)
 #===========================================================
 
@@ -217,7 +218,7 @@ class ServerGameStateDataUpdate(ServerToClientData):
     discardPile: shows the discard pile.
     NOTE: params might get added on request, if the game allows for it.
     '''
-    def __init__(self, currentPlayer: str, players: list, players_action:str, usedNoteTokens: int, usedStormTokens: int, table: list, discard: list) -> None:
+    def __init__(self, currentPlayer: str, players: list, players_action:str, usedNoteTokens: int, usedStormTokens: int, table: list, discard: list, index=None) -> None:
         action = "Show cards response"
         self.currentPlayer = currentPlayer
         self.players = players
@@ -226,6 +227,7 @@ class ServerGameStateDataUpdate(ServerToClientData):
         self.tableCards = table
         self.discardPile = discard
         self.players_action = players_action
+        self.index = index
         super().__init__(action)
 
 #====================================================

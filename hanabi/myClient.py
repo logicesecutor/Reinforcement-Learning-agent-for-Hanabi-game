@@ -44,14 +44,18 @@ def manageInput():
     global agent
     global getInput_lock
     global getInput_event
+    
 
     while run:
-
+        #===================
+        # The input is required olnly when is my turn
+        # So I wait for the event
         getInput_event.wait()
 
         command = agent.getCommand(status)
 
         getInput_event.clear()
+        #===================
 
         # Choose data to send
         if command == "exit":
@@ -65,8 +69,10 @@ def manageInput():
             try:
                 cardStr = command.split(" ")
                 cardOrder = int(cardStr[1])
+
                 s.send(GameData.ClientPlayerDiscardCardRequest(playerName, cardOrder).serialize())
-                s.send(GameData.ClientGetGameStateUpdateRequest(playerName, "discard").serialize())
+                
+
             except:
                 print("Maybe you wanted to type 'discard <num>'?")
                 getInput_event.set()
@@ -75,8 +81,9 @@ def manageInput():
             try:
                 cardStr = command.split(" ")
                 cardOrder = int(cardStr[1])
+
                 s.send(GameData.ClientPlayerPlayCardRequest(playerName, cardOrder).serialize())
-                s.send(GameData.ClientGetGameStateUpdateRequest(playerName, "play").serialize())
+
             except:
                 print("Maybe you wanted to type 'play <num>'?")
                 getInput_event.set()
@@ -98,8 +105,9 @@ def manageInput():
                     if value not in ["green", "red", "blue", "yellow", "white"]:
                         print("Error: card color can only be green, red, blue, yellow or white")
                         continue
+
                 s.send(GameData.ClientHintData(playerName, destination, t, value).serialize())
-                s.send(GameData.ClientGetGameStateUpdateRequest(playerName, "hint").serialize())
+
             except:
                 print("Maybe you wanted to type 'hint <type> <destinatary> <value>'?")
                 getInput_event.set()
@@ -114,6 +122,7 @@ def manageInput():
         stdout.flush()
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+
     request = GameData.ClientPlayerAddData(playerName)
     s.connect((HOST, PORT))
     s.send(request.serialize())
@@ -130,6 +139,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         if not data:
             continue
         data = GameData.GameData.deserialize(data)
+
         if type(data) is GameData.ServerPlayerStartRequestAccepted:
             dataOk = True
             print("Ready: " + str(data.acceptedStartRequests) + "/"  + str(data.connectedPlayers) + " players")
@@ -140,12 +150,15 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Game start!")
             s.send(GameData.ClientPlayerReadyData(playerName).serialize())
             status = statuses[1]
+            getInput_event.set()
 
-        # when you write show
+
+        # Satisfy the show request
         if type(data) is GameData.ServerGameStateData:
+            # Turn is not changed
             dataOk = True
 
-            agent.set_data(data)
+            agent.set_data(data, playerName)
                 
             print("Current player: " + data.currentPlayer)
             print("Player hands: ")
@@ -163,44 +176,94 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Note tokens used: " + str(data.usedNoteTokens) + "/8")
             print("Storm tokens used: " + str(data.usedStormTokens) + "/3")
 
+            # If is my turn
+            if data.currentPlayer == playerName:
+                getInput_event.set()
+
         #=========================================================================
+        # Data Update Request
         if type(data) is GameData.ServerGameStateDataUpdate:
+            # This is an update packet that each agent receives each time another agent
+            # make an action
+            dataOk = True
             agent.update_data(data)
             agent.update_players_action(data.players_action)
-            continue
 
+            agent.myturn = True if data.currentPlayer == agent.name else False
+            if agent.myturn:
+                getInput_event.set()
         #=========================================================================
 
-
+        # An action not accomplished
         if type(data) is GameData.ServerActionInvalid:
+            #This not change the turn so i need to perform another action
             dataOk = True
             print("Invalid action performed. Reason:")
             print(data.message)
+            
+            # Reset the event to obtain a new action
+            getInput_event.set()
+
+        # A discard succesfully make
         if type(data) is GameData.ServerActionValid:
             dataOk = True
             print("Action valid!")
             print("Current player: " + data.player)
+
+            s.send(GameData.ClientGetGameStateUpdateRequest(data.lastPlayer, "discard").serialize())
+            # agent.myturn = True if data.player == agent.name else False
+            # if agent.myturn:
+            #     getInput_event.set()
+
+        # A play succesfully make
         if type(data) is GameData.ServerPlayerMoveOk:
             dataOk = True
             print("Nice move!")
             print("Current player: " + data.player)
+
+            s.send(GameData.ClientGetGameStateUpdateRequest(data.lastPlayer, "play good").serialize())
+            # agent.myturn = True if data.player == agent.name else False
+
+            # if agent.myturn:
+            #     getInput_event.set()
+
+        # A play un-succesfully make
         if type(data) is GameData.ServerPlayerThunderStrike:
             dataOk = True
             print("OH NO! The Gods are unhappy with you!")
+
+            s.send(GameData.ClientGetGameStateUpdateRequest(data.lastPlayer, "play bad").serialize())
+            # agent.myturn = False
+
         if type(data) is GameData.ServerHintData:
             dataOk = True
-
-            #==========================================
-            agent.update_other_players_knowledge(data)
-            #==========================================
-            
+ 
             print("Hint type: " + data.type)
             print("Player " + data.destination + " cards with value " + str(data.value) + " are:")
             for i in data.positions:
                 print("\t" + str(i))
+
+            #==========================================
+            if data.destination == agent.name:
+                agent.update_my_cards_knowledge(data)
+            else:
+                agent.update_other_players_knowledge(data)
+
+            s.send(GameData.ClientGetGameStateUpdateRequest(data.source, "hint").serialize())
+
+            #==========================================
+            # agent.myturn = True if data.player == agent.name else False
+            # if agent.myturn:
+            #     getInput_event.set()
+
+
         if type(data) is GameData.ServerInvalidDataReceived:
+            # Turn is not changed
             dataOk = True
             print(data.data)
+            # Reset the event to obtain another input from the agent
+            getInput_event.set()
+            
         if type(data) is GameData.ServerGameOver:
             dataOk = True
             print(data.message)
@@ -214,4 +277,3 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         print("[" + playerName + " - " + status + "]: ", end="")
         stdout.flush()
 
-        getInput_event.set()
