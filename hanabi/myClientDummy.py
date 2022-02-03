@@ -6,7 +6,7 @@ from threading import Thread, Lock, Event
 import GameData
 import socket
 from constants import *
-from agent import Agent
+from agent_dummy import Agent
 import os
 
 agent = Agent()

@@ -35,7 +35,7 @@ class Agent:
     N_ACTIONS = len(actions)
     MAX_NO_STATES = 10000
 
-    MAX_TRAINING_EPOCH = 200
+    MAX_TRAINING_EPOCH = 1000
 
     color_value = {"blue": 0, "green": 1, "red": 2, "white": 3, "yellow": 4}
     value_color = {0: "blue", 1: "green", 2: "red", 3: "white", 4: "yellow"}
@@ -342,7 +342,7 @@ class Agent:
         #TODO: workaround TO FIX
         if action == None: 
             action="color" 
-            saved_player = p[0]
+            saved_player = self.data.players[0].name
             saved_value = "red"
         return "hint "+action+" "+saved_player+" "+str(saved_value)
                
@@ -388,7 +388,7 @@ class Agent:
             return randrange(len(self.actions))
 
     
-    def getCommand(self, status):
+    def getCommand(self, status, wait_operations_finish):
 
         res = ""
 
@@ -408,8 +408,10 @@ class Agent:
             # self.resetStates()
             # return "exit"
             #self.agent_current_game_state = "Game"
+            wait_operations_finish.wait()
             self.resetStates()
             res = "show"
+            wait_operations_finish.clear()
         elif self.gameOver and self.matchCounter > self.MAX_TRAINING_EPOCH:
             res= "exit"
 
@@ -421,7 +423,7 @@ class Agent:
         self.old_state = State(empty=True)
         self.new_state = State(empty=True)
 
-        directory_name = "hanabi/models/"+self.name+"/"
+        directory_name = "H:/Universita/Computationa Intelligence/Exam project/CI_exam_project_hanabi/hanabi/models/"+self.name+"/"
         with open(directory_name + "q_table.pkl","wb") as f:
             pickle.dump(self.Q_table, f)
         with open(directory_name+ "reward_table.pkl","wb") as f:

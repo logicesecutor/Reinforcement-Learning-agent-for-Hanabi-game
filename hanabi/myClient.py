@@ -10,7 +10,8 @@ from agent import Agent
 import os
 
 agent = Agent()
-getInput_lock = Lock()
+wait_operations_finish = Event()
+wait_operations_finish.set()
 getInput_event = Event()
 getInput_event.set()
 
@@ -43,9 +44,8 @@ def manageInput():
     global run
     global status
     global agent
-
+    global wait_operations_finish
     global chosen_action
-    global getInput_lock
     global getInput_event
     
 
@@ -55,7 +55,7 @@ def manageInput():
         # So I wait for the event
         getInput_event.wait()
 
-        command = agent.getCommand(status)
+        command = agent.getCommand(status, wait_operations_finish)
 
         getInput_event.clear()
         #===================
@@ -272,10 +272,11 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print(data.score)
             print(data.scoreMessage)
             stdout.flush()
-            agent.gameOver = True
-            #run = False
-            print("Ready for a new game!")
 
+            print("Ready for a new game!")
+            
+            agent.gameOver = True
+            wait_operations_finish.set()
             getInput_event.set()
 
         if not dataOk:
