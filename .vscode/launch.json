@@ -30,6 +30,22 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "Python: Dummy 1",
+            "type": "python",
+            "request": "launch",
+            "program": "./hanabi/myClientDummy.py",
+            "args": ["Dummy_1"],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Python: Dummy 2",
+            "type": "python",
+            "request": "launch",
+            "program": "./hanabi/myClientDummy.py",
+            "args": ["Dummy_2"],
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Python: server",
             "type": "python",
             "request": "launch",

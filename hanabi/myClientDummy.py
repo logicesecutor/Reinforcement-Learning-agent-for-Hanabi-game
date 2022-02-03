@@ -32,6 +32,7 @@ else:
 
 run = True
 
+chosen_action = 'None'
 statuses = ["Lobby", "Game", "GameHint"]
 
 status = statuses[0]
@@ -43,13 +44,20 @@ def manageInput():
     global status
     global agent
 
+    global chosen_action
+    global getInput_lock
+    global getInput_event
+    
+
     while run:
         #===================
         # The input is required olnly when is my turn
         # So I wait for the event
+        getInput_event.wait()
 
-        command = input()
+        command = agent.getCommand(status)
 
+        getInput_event.clear()
         #===================
 
         # Choose data to send
@@ -65,9 +73,9 @@ def manageInput():
                 cardStr = command.split(" ")
                 cardOrder = int(cardStr[1])
 
+                chosen_action = cardOrder
                 s.send(GameData.ClientPlayerDiscardCardRequest(playerName, cardOrder).serialize())
                 
-
             except:
                 print("Maybe you wanted to type 'discard <num>'?")
                 getInput_event.set()
@@ -77,6 +85,7 @@ def manageInput():
                 cardStr = command.split(" ")
                 cardOrder = int(cardStr[1])
 
+                chosen_action = cardOrder
                 s.send(GameData.ClientPlayerPlayCardRequest(playerName, cardOrder).serialize())
 
             except:
@@ -100,7 +109,6 @@ def manageInput():
                     if value not in ["green", "red", "blue", "yellow", "white"]:
                         print("Error: card color can only be green, red, blue, yellow or white")
                         continue
-
                 s.send(GameData.ClientHintData(playerName, destination, t, value).serialize())
 
             except:
@@ -115,6 +123,7 @@ def manageInput():
             getInput_event.set()
             continue
         stdout.flush()
+
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
@@ -140,13 +149,13 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Ready: " + str(data.acceptedStartRequests) + "/"  + str(data.connectedPlayers) + " players")
             data = s.recv(DATASIZE)
             data = GameData.GameData.deserialize(data)
+
         if type(data) is GameData.ServerStartGameData:
             dataOk = True
             print("Game start!")
             s.send(GameData.ClientPlayerReadyData(playerName).serialize())
             status = statuses[1]
             getInput_event.set()
-
 
         # Satisfy the show request
         if type(data) is GameData.ServerGameStateData:
@@ -205,30 +214,25 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Action valid!")
             print("Current player: " + data.player)
 
-            s.send(GameData.ClientGetGameStateUpdateRequest(data.lastPlayer, "discard").serialize())
-            # agent.myturn = True if data.player == agent.name else False
-            # if agent.myturn:
-            #     getInput_event.set()
+            if data.lastPlayer == agent.name:
+                s.send(GameData.ClientGetGameStateUpdateRequest(data.lastPlayer, "discard", chosen_action).serialize())
 
         # A play succesfully make
         if type(data) is GameData.ServerPlayerMoveOk:
             dataOk = True
             print("Nice move!")
             print("Current player: " + data.player)
-
-            s.send(GameData.ClientGetGameStateUpdateRequest(data.lastPlayer, "play good").serialize())
-            # agent.myturn = True if data.player == agent.name else False
-
-            # if agent.myturn:
-            #     getInput_event.set()
+             
+            if data.lastPlayer == agent.name:
+                s.send(GameData.ClientGetGameStateUpdateRequest(data.lastPlayer, "play good").serialize())
 
         # A play un-succesfully make
         if type(data) is GameData.ServerPlayerThunderStrike:
             dataOk = True
             print("OH NO! The Gods are unhappy with you!")
 
-            s.send(GameData.ClientGetGameStateUpdateRequest(data.lastPlayer, "play bad").serialize())
-            # agent.myturn = False
+            if data.lastPlayer == agent.name:
+                s.send(GameData.ClientGetGameStateUpdateRequest(data.lastPlayer, "play bad", chosen_action).serialize())
 
         if type(data) is GameData.ServerHintData:
             dataOk = True
@@ -239,18 +243,21 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 print("\t" + str(i))
 
             #==========================================
-            if data.destination == agent.name:
-                agent.update_my_cards_knowledge(data)
-            else:
-                agent.update_other_players_knowledge(data)
+            quality = " bad"
+            if len(data.positions) > 0:
+                if data.destination == agent.name:
+                    agent.update_my_cards_knowledge(data)
+                else:
+                    agent.update_other_players_knowledge(data)
+                
+                quality = " good" 
 
-            s.send(GameData.ClientGetGameStateUpdateRequest(data.source, "hint").serialize())
-
+            assert quality
+            # I sent the other players the update packet but only if I am the generator of the hint 
+            # I forward to all of them, indeed tha agent will only update his info
+            if data.source == agent.name:
+                s.send(GameData.ClientGetGameStateUpdateRequest(data.source, "hint"+quality).serialize()) 
             #==========================================
-            # agent.myturn = True if data.player == agent.name else False
-            # if agent.myturn:
-            #     getInput_event.set()
-
 
         if type(data) is GameData.ServerInvalidDataReceived:
             # Turn is not changed
@@ -265,8 +272,12 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print(data.score)
             print(data.scoreMessage)
             stdout.flush()
+            agent.gameOver = True
             #run = False
             print("Ready for a new game!")
+
+            getInput_event.set()
+
         if not dataOk:
             print("Unknown or unimplemented data type: " +  str(type(data)))
         print("[" + playerName + " - " + status + "]: ", end="")

@@ -85,6 +85,7 @@ def manageInput():
                 cardStr = command.split(" ")
                 cardOrder = int(cardStr[1])
 
+                chosen_action = cardOrder
                 s.send(GameData.ClientPlayerPlayCardRequest(playerName, cardOrder).serialize())
 
             except:
@@ -231,7 +232,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("OH NO! The Gods are unhappy with you!")
 
             if data.lastPlayer == agent.name:
-                s.send(GameData.ClientGetGameStateUpdateRequest(data.lastPlayer, "play bad").serialize())
+                s.send(GameData.ClientGetGameStateUpdateRequest(data.lastPlayer, "play bad", chosen_action).serialize())
 
         if type(data) is GameData.ServerHintData:
             dataOk = True
@@ -242,15 +243,20 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 print("\t" + str(i))
 
             #==========================================
-            if data.destination == agent.name:
-                agent.update_my_cards_knowledge(data)
-            else:
-                agent.update_other_players_knowledge(data)
+            quality = " bad"
+            if len(data.positions) > 0:
+                if data.destination == agent.name:
+                    agent.update_my_cards_knowledge(data)
+                else:
+                    agent.update_other_players_knowledge(data)
+                
+                quality = " good" 
 
+            assert quality
             # I sent the other players the update packet but only if I am the generator of the hint 
             # I forward to all of them, indeed tha agent will only update his info
             if data.source == agent.name:
-                s.send(GameData.ClientGetGameStateUpdateRequest(data.source, "hint").serialize()) 
+                s.send(GameData.ClientGetGameStateUpdateRequest(data.source, "hint"+quality).serialize()) 
             #==========================================
 
         if type(data) is GameData.ServerInvalidDataReceived:

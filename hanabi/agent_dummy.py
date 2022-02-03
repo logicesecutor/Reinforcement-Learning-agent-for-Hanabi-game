@@ -401,7 +401,7 @@ class Agent:
             res = "show"
 
         elif self.agent_current_game_state == "Learning" and status == "Game" and not self.gameOver:
-            res = self.learn()
+            res = input()
 
         if self.gameOver and self.matchCounter <= self.MAX_TRAINING_EPOCH:
         #if self.gameOver:
