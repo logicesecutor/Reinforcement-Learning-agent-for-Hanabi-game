@@ -3,16 +3,18 @@ import networkx as nx
 import GameData
 from collections import Counter
 from random import random, randrange
+import pickle
 
 clustering = 5
 
 class State:
 
-    def __init__(self, tableCards, playersHand, myHand) -> None:
+    def __init__(self, tableCards=[], playersHand=[], myHand=[], empty=False) -> None:
         super().__init__()
         self.tableCards = tableCards
         self.playersHand = playersHand
         self.myHand = myHand
+        self.empty = empty
 
     def __hash__(self)->tuple:
         return hash(tuple(self.tableCards + self.playersHand + self.myHand))
@@ -32,6 +34,8 @@ class Agent:
     actions = {"play": 0, "discard": 1, "hint": 2}
     N_ACTIONS = len(actions)
     MAX_NO_STATES = 10000
+
+    MAX_TRAINING_EPOCH = 10000
 
     color_value = {"blue": 0, "green": 1, "red": 2, "white": 3, "yellow": 4}
     value_color = {0: "blue", 1: "green", 2: "red", 3: "white", 4: "yellow"}
@@ -66,13 +70,16 @@ class Agent:
         self.name = None
 
         #======================
-        self.old_state = None
-        self.new_state = None
+        self.old_state = State(empty=True) #Generate empty State
+        self.new_state = State(empty=True) #Generate empty State
 
         self.players_actions = []
         self.total_reward = 0
 
         self.old_players_actions = None
+        self.gameOver = False
+
+        self.matchCounter = 0
         #======================
 
     def find_nearest_state(self, state:State, states_table) -> State:
@@ -134,10 +141,10 @@ class Agent:
 
             self.myturn = True if data.currentPlayer == self.name else False
 
-            self.my_cards_info = [{"color": None, "value": None, "position":None,"age":0 } for _ in range(5)]#if self.num_players>=4 else 4)]
+            self.my_cards_info = [{"color": None, "value": None, "position":None,"age":0 } for _ in range(5)] #if self.num_players>=4 else 4)]
             for player in self.data.players:
                 if player.name != self.name:
-                    self.other_players_cards_info[player.name] = [{"color": None, "value": None, "position":None } for _ in range(5)]# if self.num_players>=4 else 4)]
+                    self.other_players_cards_info[player.name] = [{"color": None, "value": None, "position":None } for _ in range(5)] # if self.num_players>=4 else 4)]
 
 
     def update_data(self, data):
@@ -158,11 +165,11 @@ class Agent:
         elif "discard" in other_player_action:
             action = 2
         else:
-            assert False
-        # action = self.actions[other_player_action]
+            assert False # Debug
+
         assert type(action) is int
 
-        self.total_reward = self.compute_reward(self.data, other_player_action)
+        self.total_reward += self.compute_reward(self.data, other_player_action)
         self.players_actions.append(action)
 
 
@@ -187,13 +194,15 @@ class Agent:
     def learn(self) -> str:
 
         assert self.data
-        
+        assert len(self.players_actions) <= self.num_players
+
         # Update the action and reward ==========
+        if self.old_state.empty:
+            self.reward_table[self.old_state] = dict()
+            self.Q_table[self.old_state] = dict()
 
-        if self.players_actions:
-            assert len(self.players_actions) == self.num_players
+        self.reward_table[self.old_state][tuple(self.players_actions)] = self.total_reward           
 
-            self.reward_table[self.old_state][tuple(self.players_actions)] = self.total_reward
         #========================================
 
         
@@ -206,7 +215,8 @@ class Agent:
                 self.new_state = self.find_nearest_state(self.new_state, self.Q_table)
             else:
                 # Add the new state row in the table
-                self.Q_table[self.new_state] = dict()
+                if self.new_state not in self.Q_table.keys():
+                    self.Q_table[self.new_state] = dict()
                 # Update the immediate reward table with the new rewars for this state
                 self.reward_table[self.new_state] = dict()
                 # Add the new edge in the graph of reachable state
@@ -216,15 +226,16 @@ class Agent:
             
         # Update the local Q-function at the previous time (T-1)
         self.update_Q_table_Previous(self.new_state, self.old_state, tuple(self.players_actions))
-        self.old_state = self.new_state
-        
-        self.old_players_actions = self.players_actions
-        self.players_actions.clear()
         new_action = self.pick_an_action(self.new_state)
         
-        #self.players_actions.append(new_action)
-
+        # In order to discard the useless card i need to increment the counter "age"
+        # which keeps track of how many time that card remains in my hand
         self.ageMyCardsBelief()
+        self.old_state = self.new_state     
+
+        # Reset the set of actions that bring us to this State
+        self.players_actions.clear()
+        self.total_reward = 0
 
         return self.buildReadableAction(new_action)
 
@@ -240,7 +251,6 @@ class Agent:
     def buildReadableAction(self, action):
         assert type(action) is int
 
-        return self.UsefullHintToAnyone()
         if action == 0:
             return self.playCard()
             
@@ -252,12 +262,13 @@ class Agent:
             
         else:
             print("Not valid action available")
+
     
     def playCard(self):
         """ Play the card with the highest probability"""
         for card in self.probable_hand:
             if self.isPlayable(card["value"], card["color"]):
-                return "play "+card["position"] 
+                return "play "+str(card["position"] )
         
         return "play "+str(randrange(len(self.my_cards_info)))
 
@@ -326,14 +337,12 @@ class Agent:
         if not res["position"]:
             return "discard "+str(randrange(len(self.my_cards_info)))
 
-        return "discard " + res["position"]
+        return "discard " + str(res["position"])
             
 
     def update_Q_table_Previous(self, new_state, old_state, set_of_action):
         
-        if len(set_of_action) < self.num_players:
-            return 
-
+    
         current_q_value = 0 if not set_of_action or not set_of_action in self.Q_table[old_state].keys() else self.Q_table[old_state][set_of_action]  #self.Q_table[old_state][set_of_action] or 0
 
         R = self.reward_table[old_state][set_of_action]
@@ -364,7 +373,6 @@ class Agent:
             return randrange(len(self.actions))
 
     
-
     def getCommand(self, status):
 
         res = ""
@@ -377,11 +385,41 @@ class Agent:
             self.agent_current_game_state = "Learning"
             res = "show"
 
-        elif self.agent_current_game_state == "Learning" and status == "Game":
-            # self.agent_current_game_state = "Game"
+        elif self.agent_current_game_state == "Learning" and status == "Game" and not self.gameOver:
             res = self.learn()
 
+        if self.gameOver and self.matchCounter <= self.MAX_TRAINING_EPOCH:
+        #if self.gameOver:
+            # self.resetStates()
+            # return "exit"
+            self.agent_current_game_state = "Game"
+            self.resetStates()
+        elif self.matchCounter > self.MAX_TRAINING_EPOCH:
+            return "exit"
+
         return res
+
+    
+    def resetStates(self):
+
+        self.old_state = State(empty=True)
+        self.new_state = State(empty=True)
+
+        directory_name = "hanabi/models/"+self.name+"/"
+        with open(directory_name + "q_table.pkl","wb") as f:
+            pickle.dump(self.Q_table, f)
+        with open(directory_name+ "reward_table.pkl","wb") as f:
+            pickle.dump(self.reward_table, f)
+        with open(directory_name+"state_graph.pkl","wb") as f:
+            pickle.dump(self.state_graph, f)
+
+        self.players_actions = []
+        self.total_reward = 0
+
+        self.matchCounter += 1
+
+        self.gameOver = False
+
          
 
     def evaluate_state(self, data:GameData.ServerGameStateData)-> State:
@@ -579,7 +617,6 @@ class Agent:
         return self.values_occurences[number-1] - num_counter 
 
         
-
     def get_value_with_max_probability_given_color(self, data, card_color, my_card_info_copy):
         # Sapendo che e' rosso, probabilita' che sia un 1
         # Numero di 1 rossi nel mazzo / totale di carte rosse nel mazzo

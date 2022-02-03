@@ -236,7 +236,7 @@ class Game(object):
     #==============================
     # Data Update request
     def __satisfyShowCardUpdateRequest(self, data: GameData.ClientGetGameStateUpdateRequest):
-        logging.info("Player "+ data.sender +"did action: "+ data.players_action +"\nUpdating local game data of all players" )
+        logging.info("Player "+ data.sender +" did action: "+ data.players_action +"\nUpdating local game data of all players" )
 
         playerUpdateList = []
         for player in self.__players:
