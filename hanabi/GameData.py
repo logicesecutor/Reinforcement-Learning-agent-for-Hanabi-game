@@ -86,17 +86,7 @@ class ClientGetGameStateRequest(ClientToServerData):
         action = "Show cards request"
         super().__init__(sender, action)
 
-#===========================================================
-class ClientGetGameStateUpdateRequest(ClientToServerData):
-    '''
-    Used to retrieve the game state.
-    '''
-    def __init__(self, sender, players_action, index=None) -> None:
-        action = "Show cards request"
-        self.players_action = players_action
-        self.index = index
-        super().__init__(sender, action)
-#===========================================================
+
 
 class ClientPlayerDiscardCardRequest(ClientToServerData):
     '''
@@ -207,6 +197,16 @@ class ServerGameStateData(ServerToClientData):
 
 
 #====================================================
+class ClientGetGameStateUpdateRequest(ClientToServerData):
+    '''
+    Used to retrieve the game state.
+    '''
+    def __init__(self, sender, players_action, index=None) -> None:
+        action = "Show cards request"
+        self.players_action = players_action
+        self.index = index
+        super().__init__(sender, action)
+
 class ServerGameStateDataUpdate(ServerToClientData):
     '''
     Shows the game state to the players.
@@ -230,6 +230,16 @@ class ServerGameStateDataUpdate(ServerToClientData):
         self.index = index
         super().__init__(action)
 
+#====================================================
+class ServerWaitOtherPlayer(ServerToClientData):
+     def __init__(self, sender: str) -> None:
+        action = "Notify other about "+ sender + " end his game"
+        super().__init__(action)
+
+class WaitOtherPlayerRequest(ClientToServerData):
+    def __init__(self, sender) -> None:
+        action = "Request of notification to other players from "+ sender + " who end his game"
+        super().__init__(sender, action)
 #====================================================
 
 

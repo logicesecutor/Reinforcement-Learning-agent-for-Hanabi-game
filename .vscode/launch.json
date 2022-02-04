@@ -4,13 +4,22 @@
     // Per altre informazioni, visitare: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-        
+        {
+            "name": "Python: File corrente",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
         {
             "name": "Python: Agent 1",
             "type": "python",
             "request": "launch",
             "program": "./hanabi/myClient.py",
-            "args": ["Agent_1"],
+            "args": [
+                "Agent_1",
+                "1"
+            ],
             "console": "integratedTerminal"
         },
         {
@@ -18,7 +27,10 @@
             "type": "python",
             "request": "launch",
             "program": "./hanabi/myClient.py",
-            "args": ["Agent_2"],
+            "args": [
+                "Agent_2",
+                "1"
+            ],
             "console": "integratedTerminal"
         },
         {
@@ -26,7 +38,32 @@
             "type": "python",
             "request": "launch",
             "program": "./hanabi/myClient.py",
-            "args": ["Agent_3"],
+            "args": [
+                "Agent_3",
+                "1"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Python: Agent 4",
+            "type": "python",
+            "request": "launch",
+            "program": "./hanabi/myClient.py",
+            "args": [
+                "Agent_4",
+                "1"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Python: Agent 5",
+            "type": "python",
+            "request": "launch",
+            "program": "./hanabi/myClient.py",
+            "args": [
+                "Agent_5",
+                "1"
+            ],
             "console": "integratedTerminal"
         },
         {
@@ -34,7 +71,9 @@
             "type": "python",
             "request": "launch",
             "program": "./hanabi/myClientDummy.py",
-            "args": ["Dummy_1"],
+            "args": [
+                "Dummy_1"
+            ],
             "console": "integratedTerminal"
         },
         {
@@ -42,7 +81,9 @@
             "type": "python",
             "request": "launch",
             "program": "./hanabi/myClientDummy.py",
-            "args": ["Dummy_2"],
+            "args": [
+                "Dummy_2"
+            ],
             "console": "integratedTerminal"
         },
         {
@@ -50,6 +91,9 @@
             "type": "python",
             "request": "launch",
             "program": "./hanabi/server.py",
+            "args": [
+                "3"
+            ],
             "console": "integratedTerminal"
         }
     ]

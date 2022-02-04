@@ -33,9 +33,9 @@ class Agent:
 
     actions = {"play": 0, "discard": 1, "hint": 2}
     N_ACTIONS = len(actions)
-    MAX_NO_STATES = 10000
 
-    MAX_TRAINING_EPOCH = 1000
+    MAX_NO_STATES = 10000
+    MAX_TRAINING_EPOCH = 1
 
     color_value = {"blue": 0, "green": 1, "red": 2, "white": 3, "yellow": 4}
     value_color = {0: "blue", 1: "green", 2: "red", 3: "white", 4: "yellow"}
@@ -47,9 +47,10 @@ class Agent:
 
     alpha = 0.2 
     epsylon = 1 # Exploration
+    exploit_explore_rate = (1 / MAX_TRAINING_EPOCH) * 2
     gamma = 0.9 # Importance of future actions
 
-    def __init__(self) -> None:
+    def __init__(self, epsylon=1) -> None:
 
         self.Q_table = dict() 
 
@@ -72,10 +73,12 @@ class Agent:
         #======================
         self.old_state = State(empty=True) #Generate empty State
         self.new_state = State(empty=True) #Generate empty State
+        self.otherPlayerEnded = 0
 
         self.players_actions = []
         self.total_reward = 0
 
+        self.epsylon = epsylon
         self.gameOver = False
 
         self.matchCounter = 0
@@ -403,16 +406,17 @@ class Agent:
         elif self.agent_current_game_state == "Learning" and status == "Game" and not self.gameOver:
             res = self.learn()
 
-        if self.gameOver and self.matchCounter <= self.MAX_TRAINING_EPOCH:
-        #if self.gameOver:
-            # self.resetStates()
-            # return "exit"
-            #self.agent_current_game_state = "Game"
-            wait_operations_finish.wait()
-            self.resetStates()
-            res = "show"
-            wait_operations_finish.clear()
-        elif self.gameOver and self.matchCounter > self.MAX_TRAINING_EPOCH:
+        # if self.gameOver and self.matchCounter < self.MAX_TRAINING_EPOCH:
+            
+        #     self.resetStates()
+        #     self.agent_current_game_state = "Game"
+        #     status = "Lobby"
+        #     res = "ready"
+        #     self.epsylon -= self.exploit_explore_rate
+            # wait_operations_finish.wait()
+            # wait_operations_finish.clear()
+
+        elif self.gameOver:# and self.matchCounter >= self.MAX_TRAINING_EPOCH:
             res= "exit"
 
         return res
@@ -438,6 +442,7 @@ class Agent:
         self.num_players = None
         self.matchCounter += 1
         self.probable_hand = []
+        self.otherPlayerEnded = 0 
 
         self.gameOver = False
 

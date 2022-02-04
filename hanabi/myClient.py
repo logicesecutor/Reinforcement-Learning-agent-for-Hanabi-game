@@ -9,16 +9,18 @@ from constants import *
 from agent import Agent
 import os
 
-agent = Agent()
+
 wait_operations_finish = Event()
-wait_operations_finish.set()
+
 getInput_event = Event()
 getInput_event.set()
 
-if len(argv) == 2:
+if len(argv) == 3:
     playerName = argv[1]
+    epsilon = int(argv[2])
     ip = HOST
     port = PORT
+
 elif len(argv) == 1:
     print("You need the player name to start the game.")
     #exit(-1)
@@ -33,6 +35,8 @@ else:
 
 run = True
 
+
+agent = Agent(epsilon)
 chosen_action = 'None'
 statuses = ["Lobby", "Game", "GameHint"]
 
@@ -44,6 +48,8 @@ def manageInput():
     global run
     global status
     global agent
+    global statuses
+
     global wait_operations_finish
     global chosen_action
     global getInput_event
@@ -55,7 +61,8 @@ def manageInput():
         # So I wait for the event
         getInput_event.wait()
 
-        command = agent.getCommand(status, wait_operations_finish)
+        if agent.otherPlayerEnded == 0:
+            command = agent.getCommand(status, wait_operations_finish)
 
         getInput_event.clear()
         #===================
@@ -155,6 +162,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Game start!")
             s.send(GameData.ClientPlayerReadyData(playerName).serialize())
             status = statuses[1]
+
             getInput_event.set()
 
         # Satisfy the show request
@@ -265,6 +273,14 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print(data.data)
             # Reset the event to obtain another input from the agent
             getInput_event.set()
+
+        if type(data) is GameData.ServerWaitOtherPlayer:
+            dataOk=True
+            agent.otherPlayerEnded += 1
+
+            if agent.otherPlayerEnded == agent.num_players:
+                wait_operations_finish.set()
+                getInput_event.set()
             
         if type(data) is GameData.ServerGameOver:
             dataOk = True
@@ -274,10 +290,13 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             stdout.flush()
 
             print("Ready for a new game!")
-            
+
             agent.gameOver = True
-            wait_operations_finish.set()
+            status = "Lobby"
+
+            #s.send(GameData.WaitOtherPlayerRequest(agent.name).serialize())
             getInput_event.set()
+            
 
         if not dataOk:
             print("Unknown or unimplemented data type: " +  str(type(data)))

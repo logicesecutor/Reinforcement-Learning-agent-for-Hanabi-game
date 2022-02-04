@@ -30,6 +30,9 @@ numPlayers = 2
 def manageConnection(conn: socket, addr):
     global status
     global game
+    global playersOk
+    global commandQueue
+    
     with conn:
         logging.info("Connected by: " + str(addr))
         keepActive = True
@@ -120,17 +123,25 @@ def manageConnection(conn: socket, addr):
                         for id in playerConnections:
                             playerConnections[id][0].send(
                                 multipleData.serialize())
-                            if game.isGameOver():
+
+                            if game.isGameOver():# and game.playerEnded == len(game.getPlayers()):
                                 logging.info("Game over")
                                 logging.info("Game score: " +
                                              str(game.getScore()))
                                 # os._exit(0)
-                                players = game.getPlayers()
-                                game = Game()
-                                for player in players:
-                                    logging.info("Starting new game")
-                                    game.addPlayer(player.name)
-                                game.start()
+                                #=============================
+                                # players = game.getPlayers()
+                                # status = "Lobby"
+                                # playersOk.clear()
+                                # #game.playerEnded = 0
+                                # game = Game()
+                                # for player in players:
+                                #     logging.info("Starting new game")
+                                #     player.ready = False
+                                #     game.addPlayer(player.name)
+                                #     commandQueue[player.name] = []
+                                #==============================
+                                # game.start()
             mutex.release()
 
 

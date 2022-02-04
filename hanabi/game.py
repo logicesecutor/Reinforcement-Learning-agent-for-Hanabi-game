@@ -159,6 +159,8 @@ class Game(object):
         self.__players = []
         self.__currentPlayer = 0
 
+        #self.playerEnded = 0
+
         # init game
         self.__started = False
         self.__lastTurn = False
@@ -174,6 +176,7 @@ class Game(object):
 
         #===================================
         self.__dataActions[GameData.ClientGetGameStateUpdateRequest] = self.__satisfyShowCardUpdateRequest
+        self.__dataActions[GameData.WaitOtherPlayerRequest] = self._satisfyWaitOtherPlayerRequest
         #===================================
 
     # Request satisfaction methods
@@ -192,7 +195,7 @@ class Game(object):
                     self.__lastMoves -= 1
             self.__gameOver, self.__score = self.__checkGameEnded()
 
-            if self.__gameOver:
+            if self.__gameOver: #and self.playerEnded == len(self.getPlayers()):
                 logging.info("Game over, people.")
                 logging.info("Please, close the server now")
                 logging.info("Score: " + str(self.__score) + "; message: " +
@@ -244,6 +247,10 @@ class Game(object):
             playerUpdateList.append(GameData.ServerGameStateDataUpdate(currentPlayer, playerList, data.players_action, self.__noteTokens, self.__stormTokens, self.__tableCards, self.__discardPile, data.index))
 
         return (playerUpdateList, None)
+
+    def _satisfyWaitOtherPlayerRequest(self, data: GameData.WaitOtherPlayerRequest):
+        #self.playerEnded += 1
+        return (None, GameData.ServerWaitOtherPlayer(data.sender))
     #==============================
     
     
@@ -440,6 +447,10 @@ class Game(object):
         self.__stormTokens += 1
 
     def __checkGameEnded(self):
+
+        # if len(self.getPlayers()) != self.playerEnded:
+        #     return False
+
         ended = True
         for pile in self.__tableCards:
             ended = ended and self.__checkFinishedFirework(pile)
