@@ -1,9 +1,11 @@
-from copy import deepcopy 
+from copy import deepcopy
+from msilib.schema import Class 
 import networkx as nx
 import GameData
 from collections import Counter
 from random import random, randrange
 import pickle
+import os
 
 clustering = 5
 
@@ -21,7 +23,16 @@ class State:
 
 
     def distance(self, state_to_compare):
-        res = 0 
+        if state_to_compare.empty and self.empty:
+            return 0
+        
+        if state_to_compare.empty:
+            return sum(self.tableCards + self.playersHand + self.myHand)
+
+        if self.empty:
+            return sum(state_to_compare.tableCards + state_to_compare.playersHand + state_to_compare.myHand)
+
+        res = 0
         res += sum([abs(self.tableCards[i] - state_to_compare.tableCards[i]) for i in range(len(self.tableCards))])
         res += sum([abs(self.playersHand[i] - state_to_compare.playersHand[i]) for i in range(len(self.playersHand))])
         res += sum([abs(self.myHand[i] - state_to_compare.myHand[i]) for i in range(len(self.myHand))])
@@ -50,10 +61,9 @@ class Agent:
     exploit_explore_rate = (1 / MAX_TRAINING_EPOCH) * 2
     gamma = 0.9 # Importance of future actions
 
-    def __init__(self, epsylon=1) -> None:
+    def __init__(self, playerName, epsylon=1) -> None:
 
         self.Q_table = dict() 
-
         self.reward_table = dict()
         self.state_graph = nx.DiGraph()
         
@@ -68,7 +78,7 @@ class Agent:
         self.probable_hand = []
 
         self.data = None
-        self.name = None
+        self.name = playerName
 
         #======================
         self.old_state = State(empty=True) #Generate empty State
@@ -82,18 +92,20 @@ class Agent:
         self.gameOver = False
 
         self.matchCounter = 0
+
+        self.loadLearning()
         #======================
 
-    def find_nearest_state(self, state:State, states_table) -> State:
+    def find_nearest_state(self, state:State, Q_table: dict) -> State:
         """Finds a near state to the given state"""
         minim = 10000000
         saved_state = None
         global clustering
 
-        for s in states_table:
+        for s in Q_table.keys():
             dist = state.distance(s)
 
-            if dist < clustering and dist < minim:
+            if dist < minim:
                 minim = dist
                 saved_state = s
         
@@ -143,7 +155,7 @@ class Agent:
         if not self.num_players or self.num_players != len(data.players): 
             self.data = data
             self.num_players = len(data.players)
-            self.name = playerName
+            
 
             self.myturn = True if data.currentPlayer == self.name else False
 
@@ -323,7 +335,7 @@ class Agent:
         # - the all players have all the info about their cards (very unlikely)
         # - the all players does not have playable cards in their hands
         # So I give the hint for the card which have the max value
-        if max_value == 0 :
+        if action == None :
             for p in self.data.players:
                 if p.name == self.name: continue
 
@@ -343,10 +355,11 @@ class Agent:
                             saved_value = card.value
 
         #TODO: workaround TO FIX
-        if action == None: 
-            action="color" 
-            saved_player = self.data.players[0].name
-            saved_value = "red"
+        # if action == None: 
+        #     action="color" 
+        #     saved_player = self.data.players[0].name
+        #     saved_value = "red"
+
         return "hint "+action+" "+saved_player+" "+str(saved_value)
                
 
@@ -379,6 +392,7 @@ class Agent:
         """Epsylon greedy exploration"""
         if random()>self.epsylon:
             # Choose exploitation
+            #possibleStates = [edge[1] for edge in self.state_graph.out_edges(state)]
             res = max(self.Q_table[state], key=self.Q_table[state].get, default=0)
             if res == 0:
                 # In this case choose exploration because we have too few experience
@@ -417,23 +431,48 @@ class Agent:
             # wait_operations_finish.clear()
 
         elif self.gameOver:# and self.matchCounter >= self.MAX_TRAINING_EPOCH:
+            self.saveLearning()
+            
             res= "exit"
 
         return res
 
+
+    def saveLearning(self):
+        directory_name = "H:/Universita/Computationa Intelligence/Exam project/CI_exam_project_hanabi/hanabi/models/"+self.name+"/"
+
+        with open(directory_name + "q_table.pkl", "wb") as f:
+            pickle.dump(self.Q_table, f)
+
+        with open(directory_name + "reward_table.pkl", "wb") as f:
+            pickle.dump(self.reward_table, f)
+
+        with open(directory_name + "state_graph.pkl", "wb") as f:
+            pickle.dump(self.state_graph, f)
+
+
+    def loadLearning(self):
+        directory_name = "H:/Universita/Computationa Intelligence/Exam project/CI_exam_project_hanabi/hanabi/models/"+self.name+"/"
+
+        if os.path.exists(directory_name + "q_table.pkl"):
+            with open(directory_name + "q_table.pkl", "rb") as f:
+                self.Q_table = pickle.load( f )
+
+        if os.path.exists(directory_name + "reward_table.pkl"):
+            with open(directory_name + "reward_table.pkl","rb") as f:
+                self.reward_table = pickle.load( f )
+                
+        if os.path.exists(directory_name + "state_graph.pkl"):
+            with open(directory_name + "state_graph.pkl","rb") as f:
+                self.state_graph = pickle.load( f )
     
+
     def resetStates(self):
 
         self.old_state = State(empty=True)
         self.new_state = State(empty=True)
 
-        directory_name = "H:/Universita/Computationa Intelligence/Exam project/CI_exam_project_hanabi/hanabi/models/"+self.name+"/"
-        with open(directory_name + "q_table.pkl","wb") as f:
-            pickle.dump(self.Q_table, f)
-        with open(directory_name+ "reward_table.pkl","wb") as f:
-            pickle.dump(self.reward_table, f)
-        with open(directory_name+"state_graph.pkl","wb") as f:
-            pickle.dump(self.state_graph, f)
+        self.saveLearning()
 
         self.players_actions = []
         self.other_players_cards_info = dict()
@@ -447,7 +486,6 @@ class Agent:
         self.gameOver = False
 
          
-
     def evaluate_state(self, data:GameData.ServerGameStateData)-> State:
             """
                 Try to univocly identifing the state of the game at time t:
@@ -507,7 +545,7 @@ class Agent:
 
         # If i have no information at all, no evaluation can be performed
         if not self.probable_hand:
-            return []
+            return [0]
 
 
         # Current player-hand evaluation

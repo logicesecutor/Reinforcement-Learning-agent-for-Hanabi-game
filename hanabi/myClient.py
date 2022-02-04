@@ -17,7 +17,7 @@ getInput_event.set()
 
 if len(argv) == 3:
     playerName = argv[1]
-    epsilon = int(argv[2])
+    epsilon = float(argv[2])
     ip = HOST
     port = PORT
 
@@ -26,17 +26,18 @@ elif len(argv) == 1:
     #exit(-1)
     playerName = "Test" # For debug
     ip = HOST
+    epsilon = 1.0
     port = PORT
 
 else:
     playerName = argv[3]
     ip = argv[1]
-    port = int(argv[2])
+    port = float(argv[2])
 
 run = True
 
 
-agent = Agent(epsilon)
+agent = Agent(playerName, epsilon)
 chosen_action = 'None'
 statuses = ["Lobby", "Game", "GameHint"]
 

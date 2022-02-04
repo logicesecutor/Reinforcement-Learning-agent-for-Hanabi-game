@@ -18,7 +18,7 @@
             "program": "./hanabi/myClient.py",
             "args": [
                 "Agent_1",
-                "1"
+                "0.6"
             ],
             "console": "integratedTerminal"
         },
@@ -92,7 +92,7 @@
             "request": "launch",
             "program": "./hanabi/server.py",
             "args": [
-                "3"
+                "5"
             ],
             "console": "integratedTerminal"
         }
