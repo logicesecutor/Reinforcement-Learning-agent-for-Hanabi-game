@@ -62,8 +62,8 @@ def manageInput():
         # So I wait for the event
         getInput_event.wait()
 
-        if agent.otherPlayerEnded == 0:
-            command = agent.getCommand(status, wait_operations_finish)
+        #if agent.otherPlayerEnded == 0:
+        command = agent.getCommand(status, wait_operations_finish)
 
         getInput_event.clear()
         #===================
@@ -86,6 +86,7 @@ def manageInput():
                 
             except:
                 print("Maybe you wanted to type 'discard <num>'?")
+                agent.valid_action = False
                 getInput_event.set()
                 continue
         elif command.split(" ")[0] == "play" and status == statuses[1]:
@@ -98,6 +99,7 @@ def manageInput():
 
             except:
                 print("Maybe you wanted to type 'play <num>'?")
+                agent.valid_action = False
                 getInput_event.set()
                 continue
         elif command.split(" ")[0] == "hint" and status == statuses[1]:
@@ -106,21 +108,29 @@ def manageInput():
                 t = command.split(" ")[1].lower()
                 if t != "colour" and t != "color" and t != "value":
                     print("Error: type can be 'color' or 'value'")
+                    agent.valid_action = False
+                    getInput_event.set()
                     continue
                 value = command.split(" ")[3].lower()
                 if t == "value":
                     value = int(value)
                     if int(value) > 5 or int(value) < 1:
                         print("Error: card values can range from 1 to 5")
+                        agent.valid_action = False
+                        getInput_event.set()
                         continue
                 else:
                     if value not in ["green", "red", "blue", "yellow", "white"]:
                         print("Error: card color can only be green, red, blue, yellow or white")
+                        agent.valid_action = False
+                        getInput_event.set()
                         continue
+
                 s.send(GameData.ClientHintData(playerName, destination, t, value).serialize())
 
             except:
                 print("Maybe you wanted to type 'hint <type> <destinatary> <value>'?")
+                agent.valid_action = False
                 getInput_event.set()
                 continue
         elif command == "":
@@ -128,6 +138,7 @@ def manageInput():
             getInput_event.set()
         else:
             print("Unknown command: " + command)
+            agent.valid_action = False
             getInput_event.set()
             continue
         stdout.flush()
@@ -215,6 +226,8 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print(data.message)
             
             # Reset the event to obtain a new action
+            agent.valid_action = False
+
             getInput_event.set()
 
         # A discard succesfully make
@@ -273,15 +286,18 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             dataOk = True
             print(data.data)
             # Reset the event to obtain another input from the agent
+            agent.valid_action = False
             getInput_event.set()
 
-        if type(data) is GameData.ServerWaitOtherPlayer:
-            dataOk=True
-            agent.otherPlayerEnded += 1
 
-            if agent.otherPlayerEnded == agent.num_players:
-                wait_operations_finish.set()
-                getInput_event.set()
+        # For Future versions
+        # if type(data) is GameData.ServerWaitOtherPlayer:
+        #     dataOk=True
+        #     agent.otherPlayerEnded += 1
+
+        #     if agent.otherPlayerEnded == agent.num_players:
+        #         wait_operations_finish.set()
+        #         getInput_event.set()
             
         if type(data) is GameData.ServerGameOver:
             dataOk = True

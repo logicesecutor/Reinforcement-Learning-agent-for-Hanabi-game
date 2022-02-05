@@ -50,7 +50,7 @@ class Agent:
     actions = {"play": 0, "discard": 1, "hint": 2}
     N_ACTIONS = len(actions)
 
-    MAX_NO_STATES = 500
+    MAX_NO_STATES = 100
     MAX_TRAINING_EPOCH = 1
 
     color_value = {"blue": 0, "green": 1, "red": 2, "white": 3, "yellow": 4}
@@ -93,6 +93,7 @@ class Agent:
         self.players_actions = []
         self.total_reward = 0
 
+        self.valid_action = False
         self.epsylon = epsylon
         self.gameOver = False
 
@@ -156,10 +157,10 @@ class Agent:
         return len(data.discardPile) + accum
 
     def set_data(self, data:GameData.ServerGameStateData):
+
         if not self.num_players or self.num_players != len(data.players): 
             self.data = data
             self.num_players = len(data.players)
-            
 
             self.myturn = True if data.currentPlayer == self.name else False
 
@@ -229,6 +230,13 @@ class Agent:
 
         assert self.data
         assert len(self.players_actions) <= self.num_players
+
+        # Reset the set of actions that bring us to this State
+        # TODO: FIXXXXX Clear Only if is a valid action
+        if self.valid_action:
+            self.players_actions.clear()
+            self.total_reward = 0
+        self.valid_action = True
         
         # Evaluate the actual state of the game from the point of view of the player
         self.new_state = self.evaluate_state(self.data)
@@ -236,38 +244,36 @@ class Agent:
         # ================ Update the actions and reward ==========
         # If the old state isn't in the reward table( this should happend only for the first state of the game which is empty )
         # we add that state to the table and save the new total reward
-        if self.old_state not in self.reward_table.keys():
-            self.reward_table[self.old_state] = dict()
-            self.Q_table[self.old_state] = dict()
+        # if self.old_state not in self.reward_table.keys():
+        #     self.reward_table[self.old_state] = dict()
+        #     #self.Q_table[self.old_state] = dict()
 
-        self.reward_table[self.old_state][tuple(self.players_actions)] = self.total_reward    
+        # self.reward_table[self.old_state][tuple(self.players_actions)] = self.total_reward    
         #========================================
 
         # ======== Discover a state and Update the data structures which contains the states =======
-
+        # If I have already discovered enough states I want to reconduce the actual state in an already known one
+        # by computing his distance with all the already known states. 
+        # The idea was that similar states are spatially near
         if len(self.Q_table) > self.MAX_NO_STATES:
             self.new_state = self.find_nearest_state(self.new_state, self.Q_table)
 
-        if self.new_state not in self.state_graph.nodes:
-            # If I have already discovered enough states I want to reconduce the actual state in an already known one
-            # by computing his distance with all the already known states. 
-            # The idea was that similar states are spatially near
-
-            # if len(self.Q_table) > self.MAX_NO_STATES:
-            #     self.new_state = self.find_nearest_state(self.new_state, self.Q_table)
-            # else:
+        if self.new_state not in self.Q_table.keys():
             # Add the new state row in the table
-            if self.new_state not in self.Q_table.keys():
-                self.Q_table[self.new_state] = dict()
+            self.Q_table[self.new_state] = dict()
             # Update the immediate reward table with the new rewars for this state
-            self.reward_table[self.new_state] = dict()
+            if self.new_state not in self.reward_table.keys():
+                self.reward_table[self.new_state] = dict()
             # Add the new edge in the graph of reachable state
             if not self.state_graph.has_edge(self.old_state, self.new_state):
                 self.state_graph.add_edge(self.old_state, self.new_state)
         # ===========================================================================================
 
         # Update the local Q-function at the previous time (T-1)
-        self.update_Q_table_Previous(self.new_state, self.old_state, tuple(self.players_actions))
+        if not self.old_state.empty:
+            self.reward_table[self.old_state][tuple(self.players_actions)] = self.total_reward
+            self.update_Q_table_Previous(self.new_state, self.old_state, tuple(self.players_actions))
+            
         new_action = self.pick_an_action(self.new_state)
         
         # In order to discard the useless card i need to increment the counter "age"
@@ -275,12 +281,26 @@ class Agent:
         self.ageMyCardsBelief()
         self.old_state = self.new_state     
 
-        # Reset the set of actions that bring us to this State
-        self.players_actions.clear()
-        self.total_reward = 0
-
         return self.buildReadableAction(new_action)
+    
 
+    def update_Q_table_Previous(self, new_state, old_state, set_of_action):
+        """
+            Bellman equation for Q-learning. The update is made not at time T+1 but at time T-1. 
+            Because the reward is available at time T.
+        """
+    
+        current_q_value = 0 if set_of_action not in self.Q_table[old_state].keys() else self.Q_table[old_state][set_of_action]
+
+        R = self.reward_table[old_state][set_of_action]
+
+        Q_value_for_joint_action = max(self.Q_table[new_state].values(), default=0)
+        
+        LOSS = self.gamma * Q_value_for_joint_action - current_q_value
+
+        
+        # Bellman equation for reinforcement learning 
+        self.Q_table[old_state][set_of_action] = (1-self.alpha) * current_q_value + self.alpha * (R + LOSS)
 
     def ageMyCardsBelief(self):
         """
@@ -432,7 +452,7 @@ class Agent:
         all_info = [card for card in self.my_cards_info if card["value"] and card["color"]]
         for card in all_info:
             if self.is_alreadyOnTable(card["value"], card["color"]):
-                return "discard " + str(card["position"])
+                return "discard " + str(self.my_cards_info.index(card))
 
         no_info_cards = [card for card in self.my_cards_info if not card["value"] and not card["color"]]
         no_info_cards = max(no_info_cards, key=lambda x:x["age"], default={})
@@ -470,30 +490,12 @@ class Agent:
             all_info = [card for card in self.my_cards_info if card["value"] and card["color"] and not self.isPlayable(card["value"], card["color"])]
             res = max(all_info, key=lambda x:x["age"], default={})
 
+
+        # TODO: RESOLVE NONE position
         assert res
 
-        return "discard " + str(res["position"])
+        return "discard " + str(self.my_cards_info.index(res))
             
-
-    def update_Q_table_Previous(self, new_state, old_state, set_of_action):
-        """
-            Bellman equation for Q-learning. The update is made not at time T+1 but at time T-1. 
-            Because the reward is available at time T.
-        """
-    
-        current_q_value = 0 if set_of_action not in self.Q_table[old_state].keys() else self.Q_table[old_state][set_of_action]
-
-        R = self.reward_table[old_state][set_of_action]
-
-        Q_value_for_joint_action = max(self.Q_table[new_state].values(), default=0)
-        
-        LOSS = self.gamma * Q_value_for_joint_action - current_q_value
-
-        
-        # Bellman equation for reinforcement learning 
-        self.Q_table[old_state][set_of_action] = (1-self.alpha) * current_q_value + self.alpha * (R + LOSS)
-        
-
 
     def pick_an_action(self, state) -> int:
         """Epsylon greedy exploration"""
@@ -853,4 +855,6 @@ class Agent:
         
         assert s >=0 and s <= 25
 
-        return s
+        
+
+        return s # sum([len(card) for card in data.tableCards.values()])
