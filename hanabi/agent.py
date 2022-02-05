@@ -1,5 +1,7 @@
+from argparse import Action
 from copy import deepcopy
-from msilib.schema import Class 
+from msilib.schema import Class
+from re import L 
 import networkx as nx
 import GameData
 from collections import Counter
@@ -18,11 +20,14 @@ class State:
         self.myHand = myHand
         self.empty = empty
 
-    def __hash__(self)->tuple:
+    def __hash__(self) -> int:
         return hash(tuple(self.tableCards + self.playersHand + self.myHand))
 
+    def __str__(self) -> str:
+        return str(self.tableCards) + str(self.playersHand) + str(self.myHand)
 
-    def distance(self, state_to_compare):
+
+    def distance(self, state_to_compare) -> int:
         if state_to_compare.empty and self.empty:
             return 0
         
@@ -45,7 +50,7 @@ class Agent:
     actions = {"play": 0, "discard": 1, "hint": 2}
     N_ACTIONS = len(actions)
 
-    MAX_NO_STATES = 10000
+    MAX_NO_STATES = 500
     MAX_TRAINING_EPOCH = 1
 
     color_value = {"blue": 0, "green": 1, "red": 2, "white": 3, "yellow": 4}
@@ -114,7 +119,7 @@ class Agent:
 
     def compute_reward(self, data, action) -> int:
         """
-        This function compute the immediate reward for a given state simulating each possible action
+        This function compute the immediate reward for a given action
         """
         if "hint" in action:
             if data.usedNoteTokens == 0:
@@ -122,7 +127,7 @@ class Agent:
             if "bad" in action:
                 return -10
             if "good" in action:
-                return 0
+                return self.table_score(data)
 
         elif action == "discard":
             if "bad" in action:
@@ -133,7 +138,6 @@ class Agent:
         elif "play" in action:
             if "bad" in action:
                 return -10 
-            #if data.usedStormTokens == 3:
                 
             elif self.table_score(data) == 25:
                 return 100
@@ -151,7 +155,7 @@ class Agent:
 
         return len(data.discardPile) + accum
 
-    def set_data(self, data:GameData.ServerGameStateData, playerName):
+    def set_data(self, data:GameData.ServerGameStateData):
         if not self.num_players or self.num_players != len(data.players): 
             self.data = data
             self.num_players = len(data.players)
@@ -166,6 +170,7 @@ class Agent:
 
 
     def update_data(self, data):
+        """Each time a player make an action, all of the players update their data about the table infos"""
         self.data = data
 
         if data.players_action == "discard" or data.players_action == "play bad":
@@ -175,7 +180,7 @@ class Agent:
                 if len(data.tableCards)>0:
                     self.my_cards_info.append({"color": None, "value": None, "position":None,"age":0 })
 
-            # Else delete from my knowledge of other cards this card with a new one
+            # Else delete, from my knowledge of other players cards, this card with a new one
             else:
                 self.other_players_cards_info[data.currentPlayer].pop(data.index)
                 if len(data.tableCards)>0:
@@ -184,6 +189,7 @@ class Agent:
 
 
     def update_players_action(self, other_player_action: str):
+        """For each action that each players make, each player make its own evaluation on it"""
 
         if "play" in other_player_action:
             action = 0
@@ -201,6 +207,7 @@ class Agent:
 
 
     def update_my_cards_knowledge(self, data):
+        """Update my knowledge about what cards I have in my hand"""
         for position in data.positions:
             self.my_cards_info[position]["position"] = position
 
@@ -208,6 +215,7 @@ class Agent:
             
 
     def update_other_players_knowledge(self, data):
+        """Update my knowledge about what the other players knows about themselves"""
         for position in data.positions:
             self.other_players_cards_info[data.destination][position]["position"] = position
 
@@ -215,38 +223,49 @@ class Agent:
             
 
     def learn(self) -> str:
+        """
+            Learn from action using Q-table and return the next action the player will consider a good choice.
+        """
 
         assert self.data
         assert len(self.players_actions) <= self.num_players
+        
+        # Evaluate the actual state of the game from the point of view of the player
+        self.new_state = self.evaluate_state(self.data)
 
-        # Update the action and reward ==========
-        if self.old_state.empty:
+        # ================ Update the actions and reward ==========
+        # If the old state isn't in the reward table( this should happend only for the first state of the game which is empty )
+        # we add that state to the table and save the new total reward
+        if self.old_state not in self.reward_table.keys():
             self.reward_table[self.old_state] = dict()
             self.Q_table[self.old_state] = dict()
 
-        self.reward_table[self.old_state][tuple(self.players_actions)] = self.total_reward           
-
+        self.reward_table[self.old_state][tuple(self.players_actions)] = self.total_reward    
         #========================================
 
-        
-        self.new_state = self.evaluate_state(self.data)
+        # ======== Discover a state and Update the data structures which contains the states =======
 
-        # Discover a state and Update the DS which contains the states
+        if len(self.Q_table) > self.MAX_NO_STATES:
+            self.new_state = self.find_nearest_state(self.new_state, self.Q_table)
+
         if self.new_state not in self.state_graph.nodes:
-        
-            if len(self.Q_table) > self.MAX_NO_STATES:
-                self.new_state = self.find_nearest_state(self.new_state, self.Q_table)
-            else:
-                # Add the new state row in the table
-                if self.new_state not in self.Q_table.keys():
-                    self.Q_table[self.new_state] = dict()
-                # Update the immediate reward table with the new rewars for this state
-                self.reward_table[self.new_state] = dict()
-                # Add the new edge in the graph of reachable state
-                if not self.state_graph.has_edge(self.old_state, self.new_state):
-                    self.state_graph.add_edge(self.old_state, self.new_state)
+            # If I have already discovered enough states I want to reconduce the actual state in an already known one
+            # by computing his distance with all the already known states. 
+            # The idea was that similar states are spatially near
 
-            
+            # if len(self.Q_table) > self.MAX_NO_STATES:
+            #     self.new_state = self.find_nearest_state(self.new_state, self.Q_table)
+            # else:
+            # Add the new state row in the table
+            if self.new_state not in self.Q_table.keys():
+                self.Q_table[self.new_state] = dict()
+            # Update the immediate reward table with the new rewars for this state
+            self.reward_table[self.new_state] = dict()
+            # Add the new edge in the graph of reachable state
+            if not self.state_graph.has_edge(self.old_state, self.new_state):
+                self.state_graph.add_edge(self.old_state, self.new_state)
+        # ===========================================================================================
+
         # Update the local Q-function at the previous time (T-1)
         self.update_Q_table_Previous(self.new_state, self.old_state, tuple(self.players_actions))
         new_action = self.pick_an_action(self.new_state)
@@ -265,24 +284,22 @@ class Agent:
 
     def ageMyCardsBelief(self):
         """
-            In order to discard the oldest card in the hand i need to increment the age at each 
+            In order to discard the oldest card in the hand i need to increment the age at each turn of play
         """
-        for card in self.my_cards_info:
-            card["age"] += 1
+        for card in self.my_cards_info: card["age"] += 1
 
 
-    def buildReadableAction(self, action):
+    def buildReadableAction(self, action: int)-> str:
+        """Simply build the corrispondent string command for the game console"""
         assert type(action) is int
-        
-        #return self.UsefullHintToAnyone()
 
         if action == 0:
             return self.playCard()
             
-        if action == 2:
+        elif action == 2:
             return self.UsefullHintToAnyone()
             
-        if action == 1:
+        elif action == 1:
             return self.discardOldest()
             
         else:
@@ -291,18 +308,25 @@ class Agent:
     
     def playCard(self):
         """ Play the card with the highest probability"""
-        for card in self.probable_hand:
+
+        for card in sorted(self.probable_hand,key=lambda x: x["probability"], reverse=True):
             if self.isPlayable(card["value"], card["color"]):
                 return "play "+str(card["position"] )
         
+        # If this line is reached a random card is played but this will be
+        # a wrong card and the sistem will track this action as bad
         return "play "+str(randrange(len(self.my_cards_info)))
 
-    def isPlayable(self, value, card_color) -> bool:
+
+    def isPlayable(self, card_value, card_color) -> bool:
+        """ Return True if a card is playable. False instead. """
+
         for color_pile, cards in self.data.tableCards.items():
             max_val = len(cards)
-            if color_pile == card_color and max_val + 1 == value :
+            if color_pile == card_color and max_val + 1 == card_value :
                 return True
         return False
+
 
     def UsefullHintToAnyone(self):
         """ Give an hint to a next player that maximize the quotient: score_of_the_card/knowledge """
@@ -335,7 +359,7 @@ class Agent:
         # - the all players have all the info about their cards (very unlikely)
         # - the all players does not have playable cards in their hands
         # So I give the hint for the card which have the max value
-        if action == None :
+        if not action:
             for p in self.data.players:
                 if p.name == self.name: continue
 
@@ -354,27 +378,110 @@ class Agent:
                             saved_player = p.name
                             saved_value = card.value
 
-        #TODO: workaround TO FIX
-        # if action == None: 
-        #     action="color" 
-        #     saved_player = self.data.players[0].name
-        #     saved_value = "red"
+        if not action:
+            # Means that all the players have all the info about all their cards (Is more probable in small game with 2 or 3 players).
+            # In this case another hint will be useless and so we can give a bad hint so the system can give a bad score to this action.
+            for p in self.data.players:
+                if p.name == self.name: continue
+                colors = [card["color"] for card in self.other_players_cards_info[p.name]]
+                for color in self.color_value.keys():
+                    if color not in colors:
+                        action = "color"
+                        saved_player = p.name
+                        saved_value = color
+                        break
+                if action:
+                    break
+                
+                values = [card["value"] for card in self.other_players_cards_info[p.name]]
+                for value in range(1,6):
+                    if value not in values: 
+                        action = "value"
+                        saved_player = p.name
+                        saved_value = value
+                        break
+                if action:
+                    break
 
+        assert action
+           
         return "hint "+action+" "+saved_player+" "+str(saved_value)
-               
+
+    def is_alreadyOnTable(self, card_value, card_color):
+        """ Tells if a card is already on the table card """
+        for color_pile, cards in self.data.tableCards.items():
+            max_val = len(cards)
+            if color_pile == card_color and max_val >= card_value :
+                return True
+        return False
+
+    def is_onTable_color(self, card_color):
+        for color_pile, cards in self.data.tableCards.items():
+            if card_color == color_pile and cards:
+                return True
+        return False
+    
 
     def discardOldest(self):
-        res = max(self.my_cards_info, key=lambda x:x["age"])
-        if not res["position"]:
-            return "discard "+str(randrange(len(self.my_cards_info)))
+        """ 
+        When I choose to discard a card I choose from:
+        - a card already on the table of which I have all the info,
+        - the card which I had in my hand the most with less information,
+        - the card of which i have all the info but is not playable
+        """
+        all_info = [card for card in self.my_cards_info if card["value"] and card["color"]]
+        for card in all_info:
+            if self.is_alreadyOnTable(card["value"], card["color"]):
+                return "discard " + str(card["position"])
+
+        no_info_cards = [card for card in self.my_cards_info if not card["value"] and not card["color"]]
+        no_info_cards = max(no_info_cards, key=lambda x:x["age"], default={})
+
+        only_color_info = [card for card in self.my_cards_info if not card["value"] and card["color"]]
+        only_color_info = max(only_color_info, key=lambda x:x["age"], default={})
+        
+        only_value_info = [card for card in self.my_cards_info if card["value"] and not card["color"]]
+        only_value_info = max(only_value_info, key=lambda x:x["age"], default={})
+
+        # The oldest one with less infos
+        res = {}
+        if no_info_cards and only_color_info and only_value_info:
+            res = max([no_info_cards, only_color_info, only_value_info], key=lambda x:x["age"], default=[])
+
+        elif no_info_cards and only_color_info and not only_value_info:
+            res = max([no_info_cards, only_color_info], key=lambda x:x["age"], default=[])
+
+        elif no_info_cards and not only_color_info and only_value_info:
+            res = max([no_info_cards, only_value_info], key=lambda x:x["age"], default=[])
+
+        elif no_info_cards and not only_color_info and not only_value_info:
+            res = no_info_cards
+
+        elif not no_info_cards and only_color_info and only_value_info:
+            res = max([only_color_info, only_value_info], key=lambda x:x["age"], default=[])
+            
+        elif not no_info_cards and not only_color_info and only_value_info:
+            res = only_value_info
+
+        elif not no_info_cards and only_color_info and not only_value_info:
+            res = only_color_info
+
+        elif not no_info_cards and not only_color_info and not only_value_info:
+            all_info = [card for card in self.my_cards_info if card["value"] and card["color"] and not self.isPlayable(card["value"], card["color"])]
+            res = max(all_info, key=lambda x:x["age"], default={})
+
+        assert res
 
         return "discard " + str(res["position"])
             
 
     def update_Q_table_Previous(self, new_state, old_state, set_of_action):
-        
+        """
+            Bellman equation for Q-learning. The update is made not at time T+1 but at time T-1. 
+            Because the reward is available at time T.
+        """
     
-        current_q_value = 0 if not set_of_action or not set_of_action in self.Q_table[old_state].keys() else self.Q_table[old_state][set_of_action]  #self.Q_table[old_state][set_of_action] or 0
+        current_q_value = 0 if set_of_action not in self.Q_table[old_state].keys() else self.Q_table[old_state][set_of_action]
 
         R = self.reward_table[old_state][set_of_action]
 
@@ -390,12 +497,12 @@ class Agent:
 
     def pick_an_action(self, state) -> int:
         """Epsylon greedy exploration"""
-        if random()>self.epsylon:
+        if random() > self.epsylon:
             # Choose exploitation
             #possibleStates = [edge[1] for edge in self.state_graph.out_edges(state)]
-            res = max(self.Q_table[state], key=self.Q_table[state].get, default=0)
-            if res == 0:
-                # In this case choose exploration because we have too few experience
+            res = max(self.Q_table[state], key=self.Q_table[state].get, default=())
+            if res == ():
+                # In this case I don't have an available action so I choose exploration because we have too few experience on that particular state
                 return randrange(len(self.actions))
 
             return res[0]
@@ -442,13 +549,13 @@ class Agent:
         directory_name = "H:/Universita/Computationa Intelligence/Exam project/CI_exam_project_hanabi/hanabi/models/"+self.name+"/"
 
         with open(directory_name + "q_table.pkl", "wb") as f:
-            pickle.dump(self.Q_table, f)
+            pickle.dump(self.Q_table, f )
 
         with open(directory_name + "reward_table.pkl", "wb") as f:
-            pickle.dump(self.reward_table, f)
+            pickle.dump(self.reward_table, f )
 
         with open(directory_name + "state_graph.pkl", "wb") as f:
-            pickle.dump(self.state_graph, f)
+            pickle.dump(self.state_graph, f )
 
 
     def loadLearning(self):
@@ -488,7 +595,7 @@ class Agent:
          
     def evaluate_state(self, data:GameData.ServerGameStateData)-> State:
             """
-                Try to univocly identifing the state of the game at time t:
+                Try to uniquely identifing the state of the game at time t:
                 - Evaluate the cards on the table, the number of blue and red tokens.
                 - Evaluate the card of the other players
                 - Evaluate the hand this agent have        
@@ -504,9 +611,9 @@ class Agent:
     def evaluate_my_state(self, data:GameData.ServerGameStateData):
         """
             Make an estimation of a probable hand based on the info that I have.
-            Than I evaluate my hand as the maximum score that i can make if i play all the card.
+            Than I evaluate my hand as the maximum score that i can make as if i play all the cards.
             The idea behind is that different cards can have the same total score and I want to 
-            make similar choice for similar scores. Similar state leads to similar actions
+            make similar choice for similar scores. Similar state leads to similar actions.
         """
         self.probable_hand = [] 
         my_card_info_copy = deepcopy(self.my_cards_info)
@@ -563,7 +670,7 @@ class Agent:
                     max_val = p_value
             s += max_val
             # An IDEA can be to Multiply the max value for the probability of having this card but the introduction of
-            # real number leads to a solution space too big to be evaluated
+            # real number leads to a solution space too big in order to be evaluated
         # s.append(max_val)  #* saved_prob
         
         return [s]
@@ -614,6 +721,7 @@ class Agent:
 
 
     def get_numCard_per_color(self, data:GameData.ServerGameStateData, color, my_card_info_copy):
+        """Count the number of cards of the given color on the table"""
         num_counter = 0
         
         # All the card of that color in the other players hand
@@ -638,6 +746,7 @@ class Agent:
 
 
     def get_numCard_per_value(self, data:GameData.ServerGameStateData, number, my_card_info_copy):
+        """Count the number of cards of the given value on the table"""
 
         num_counter = 0
 
@@ -660,6 +769,8 @@ class Agent:
 
 
     def get_numCard_per_value_and_color(self, data:GameData.ServerGameStateData, number, color, my_card_info_copy):
+        """Count the number of cards of the given value and color on the table"""
+
         num_counter = 0
         
         for player in data.players:
@@ -727,7 +838,7 @@ class Agent:
         """ Encode the table state in a B-R-CC integer where:
             - B is an integer that encode the number of used blue token [0. 8]
             - R is an integer that encode the number of used red token [0, 3]
-            - CC is the score of the table in that particular observation [0, 25]
+            - CC is the score of the table in that particular observation [0, 25]. Maybe we could not take it into account
             The function return a number in the range [0, 8325]
         """
         
@@ -735,7 +846,7 @@ class Agent:
     
 
     def table_score(self, data:GameData.ServerGameStateData):
-        """Return the score of the card on the table at that istant t"""
+        """Return the score of the card on the table at time T"""
         s = 0
         for color in data.tableCards:
             s += max([v.value for v in data.tableCards[color]], default=0)

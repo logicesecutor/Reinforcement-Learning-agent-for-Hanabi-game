@@ -92,7 +92,7 @@
             "request": "launch",
             "program": "./hanabi/server.py",
             "args": [
-                "5"
+                "2"
             ],
             "console": "integratedTerminal"
         }

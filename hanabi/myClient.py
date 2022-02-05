@@ -171,7 +171,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             # Turn is not changed
             dataOk = True
 
-            agent.set_data(data, playerName)
+            agent.set_data(data)
                 
             print("Current player: " + data.currentPlayer)
             print("Player hands: ")
@@ -293,7 +293,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Ready for a new game!")
 
             agent.gameOver = True
-            status = "Lobby"
+            #status = "Lobby"
 
             #s.send(GameData.WaitOtherPlayerRequest(agent.name).serialize())
             getInput_event.set()
