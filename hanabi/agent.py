@@ -99,126 +99,6 @@ class Agent:
         self.loadLearning()
         #======================
 
-    def find_nearest_state(self, state:State, Q_table: dict) -> State:
-        """Finds a near state to the given state"""
-        minim = 10000000
-        saved_state = None
-        global clustering
-
-        for s in Q_table.keys():
-            dist = state.distance(s)
-
-            if dist < minim:
-                minim = dist
-                saved_state = s
-        
-        return saved_state
-
-
-    def compute_reward(self, data, action) -> int:
-        """
-        This function compute the immediate reward for a given action
-        """
-        if "hint" in action:
-            if data.usedNoteTokens == 0:
-                return -10
-            if "bad" in action:
-                return -10
-            if "good" in action:
-                return self.table_score(data)
-
-        elif action == "discard":
-            if "bad" in action:
-                return -10
-            elif self.count_played_cards(data) == 50:
-                return self.table_score(data)
-            
-        elif "play" in action:
-            if "bad" in action:
-                return -10 
-                
-            elif self.table_score(data) == 25:
-                return 100
-            else:
-                return self.table_score(data)
-                    
-        return 0
-
-
-    def count_played_cards(self,data:GameData.ServerGameStateData):
-        accum = 0
-        for player in data.players:
-            accum += len(player.hand)
-        accum += len(self.my_cards_info)
-
-        return len(data.discardPile) + accum
-
-    def set_data(self, data:GameData.ServerGameStateData):
-
-        if not self.num_players or self.num_players != len(data.players): 
-            self.data = data
-            self.num_players = len(data.players)
-
-            self.myturn = True if data.currentPlayer == self.name else False
-
-            self.my_cards_info = [{"color": None, "value": None, "position":None,"age":0 } for _ in range(5)] #if self.num_players>=4 else 4)]
-            for player in self.data.players:
-                if player.name != self.name:
-                    self.other_players_cards_info[player.name] = [{"color": None, "value": None, "position":None } for _ in range(5)] # if self.num_players>=4 else 4)]
-
-
-    def update_data(self, data):
-        """Each time a player make an action, all of the players update their data about the table infos"""
-        self.data = data
-
-        if data.players_action == "discard" or data.players_action == "play bad":
-            # If the player who discard is this player delete the actual info on this card and add a new one
-            if data.currentPlayer == self.name:
-                self.my_cards_info.pop(data.index)
-                if len(data.tableCards)>0:
-                    self.my_cards_info.append({"color": None, "value": None, "position":None,"age":0 })
-
-            # Else delete, from my knowledge of other players cards, this card with a new one
-            else:
-                self.other_players_cards_info[data.currentPlayer].pop(data.index)
-                if len(data.tableCards)>0:
-                    self.other_players_cards_info[data.currentPlayer].append({"color": None, "value": None, "position":None })
-
-
-
-    def update_players_action(self, other_player_action: str):
-        """For each action that each players make, each player make its own evaluation on it"""
-
-        if "play" in other_player_action:
-            action = 0
-        elif "hint" in other_player_action:
-            action = 1
-        elif "discard" in other_player_action:
-            action = 2
-        else:
-            assert False # Debug
-
-        assert type(action) is int
-
-        self.total_reward += self.compute_reward(self.data, other_player_action)
-        self.players_actions.append(action)
-
-
-    def update_my_cards_knowledge(self, data):
-        """Update my knowledge about what cards I have in my hand"""
-        for position in data.positions:
-            self.my_cards_info[position]["position"] = position
-
-            self.my_cards_info[position][data.type] = data.value
-            
-
-    def update_other_players_knowledge(self, data):
-        """Update my knowledge about what the other players knows about themselves"""
-        for position in data.positions:
-            self.other_players_cards_info[data.destination][position]["position"] = position
-
-            self.other_players_cards_info[data.destination][position][data.type] = data.value
-            
 
     def learn(self) -> str:
         """
@@ -278,6 +158,126 @@ class Agent:
 
         # Bellman equation for reinforcement learning 
         self.Q_table[old_state][set_of_action] = (1-self.alpha) * current_q_value + self.alpha * (R + LOSS)
+
+    def find_nearest_state(self, state:State, Q_table: dict) -> State:
+        """Finds a near state to the given state"""
+        minim = 10000000
+        saved_state = None
+        global clustering
+
+        for s in Q_table.keys():
+            dist = state.distance(s)
+
+            if dist < minim:
+                minim = dist
+                saved_state = s
+        
+        return saved_state
+
+
+    def compute_reward(self, data, action) -> int:
+        """
+        This function compute the immediate reward for a given action
+        """
+        if "hint" in action:
+            if data.usedNoteTokens == 0:
+                return -10
+            if "bad" in action:
+                return -10
+            if "good" in action:
+                return self.table_score(data)
+
+        elif action == "discard":
+            if "bad" in action:
+                return -10
+            elif self.count_played_cards(data) == 50:
+                return self.table_score(data)
+            
+        elif "play" in action:
+            if "bad" in action:
+                return -10 
+                
+            elif self.table_score(data) == 25:
+                return 100
+            else:
+                return self.table_score(data)
+                    
+        return 0
+
+
+    def count_played_cards(self,data:GameData.ServerGameStateData):
+        accum = 0
+        for player in data.players:
+            accum += len(player.hand)
+        accum += len(self.my_cards_info)
+
+        return len(data.discardPile) + accum
+
+
+    def set_data(self, data:GameData.ServerGameStateData):
+
+        if not self.num_players or self.num_players != len(data.players): 
+            self.data = data
+            self.num_players = len(data.players)
+
+            self.myturn = True if data.currentPlayer == self.name else False
+
+            self.my_cards_info = [{"color": None, "value": None, "position":None,"age":0 } for _ in range(5)] #if self.num_players>=4 else 4)]
+            for player in self.data.players:
+                if player.name != self.name:
+                    self.other_players_cards_info[player.name] = [{"color": None, "value": None, "position":None } for _ in range(5)] # if self.num_players>=4 else 4)]
+
+
+    def update_data(self, data):
+        """Each time a player make an action, all of the players update their data about the table infos"""
+        self.data = data
+
+        if data.players_action == "discard" or data.players_action == "play bad":
+            # If the player who discard is this player delete the actual info on this card and add a new one
+            if data.currentPlayer == self.name:
+                self.my_cards_info.pop(data.index)
+                if len(data.tableCards)>0:
+                    self.my_cards_info.append({"color": None, "value": None, "position":None,"age":0 })
+
+            # Else delete, from my knowledge of other players cards, this card with a new one
+            else:
+                self.other_players_cards_info[data.currentPlayer].pop(data.index)
+                if len(data.tableCards)>0:
+                    self.other_players_cards_info[data.currentPlayer].append({"color": None, "value": None, "position":None })
+
+
+    def update_players_action(self, other_player_action: str):
+        """For each action that each players make, each player make its own evaluation on it"""
+
+        if "play" in other_player_action:
+            action = 0
+        elif "hint" in other_player_action:
+            action = 1
+        elif "discard" in other_player_action:
+            action = 2
+        else:
+            assert False # Debug
+
+        assert type(action) is int
+
+        self.total_reward += self.compute_reward(self.data, other_player_action)
+        self.players_actions.append(action)
+
+
+    def update_my_cards_knowledge(self, data):
+        """Update my knowledge about what cards I have in my hand"""
+        for position in data.positions:
+            self.my_cards_info[position]["position"] = position
+
+            self.my_cards_info[position][data.type] = data.value
+            
+
+    def update_other_players_knowledge(self, data):
+        """Update my knowledge about what the other players knows about themselves"""
+        for position in data.positions:
+            self.other_players_cards_info[data.destination][position]["position"] = position
+
+            self.other_players_cards_info[data.destination][position][data.type] = data.value
 
 
     def removeEntries(self):
@@ -489,8 +489,6 @@ class Agent:
             all_info = [card for card in self.my_cards_info if card["value"] and card["color"] and not self.isPlayable(card["value"], card["color"])]
             res = max(all_info, key=lambda x:x["age"], default={})
 
-
-        # TODO: RESOLVE NONE position
         assert res
 
         return "discard " + str(self.my_cards_info.index(res))
@@ -575,23 +573,23 @@ class Agent:
                 self.state_graph = pickle.load( f )
     
 
-    def resetStates(self):
+    # def resetStates(self):
 
-        self.old_state = State(empty=True)
-        self.new_state = State(empty=True)
+    #     self.old_state = State(empty=True)
+    #     self.new_state = State(empty=True)
 
-        self.saveLearning()
+    #     self.saveLearning()
 
-        self.players_actions = []
-        self.other_players_cards_info = dict()
-        self.my_cards_info = None
-        self.total_reward = 0
-        self.num_players = None
-        self.matchCounter += 1
-        self.probable_hand = []
-        self.otherPlayerEnded = 0 
+    #     self.players_actions = []
+    #     self.other_players_cards_info = dict()
+    #     self.my_cards_info = None
+    #     self.total_reward = 0
+    #     self.num_players = None
+    #     self.matchCounter += 1
+    #     self.probable_hand = []
+    #     self.otherPlayerEnded = 0 
 
-        self.gameOver = False
+    #     self.gameOver = False
 
          
     def evaluate_state(self, data:GameData.ServerGameStateData)-> State:
@@ -848,12 +846,4 @@ class Agent:
 
     def table_score(self, data:GameData.ServerGameStateData):
         """Return the score of the card on the table at time T"""
-        s = 0
-        for color in data.tableCards:
-            s += max([v.value for v in data.tableCards[color]], default=0)
-        
-        assert s >=0 and s <= 25
-
-        
-
-        return s # sum([len(card) for card in data.tableCards.values()])
+        return sum([len(card) for card in data.tableCards.values()])
