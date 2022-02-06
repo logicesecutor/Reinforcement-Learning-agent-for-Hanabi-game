@@ -38,6 +38,6 @@ To solve this problem the state evaluation is divided in three parts:
 
 
 ## Conclusion
-My conclusion is that it doesn't work at all. I have a bug that ends the training session right in the middle and because of I cannot perform statistics on the results. I am not able to remove it.
+My conclusion is that it doesn't work at all. I have a bug that ends the training session right in the middle and because of that I cannot perform statistics on the results. I am not able to remove it.
 
 I am not happy with that because I spent a lot of time and effort on this project.
