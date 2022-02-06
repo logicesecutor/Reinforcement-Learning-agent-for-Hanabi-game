@@ -20,7 +20,7 @@ In order to do that, I use the bellman equation for Q-learning but here I encout
 In order to perform the update I need the best Q-value from the next state but, at time T I don't have access to the next state because I don't know what it could be. I need to discover it first.
 The next idea was to perform the update at posteriori. To do that I keep track of the past State and when I will be in the next state I perform the update. So the Formula became:
 
-![Bellman Equation](./images/bellman_equation.jpg)
+![Bellman Equation](./hanabi/images/bellman_equation.jpg)
 
 ## The Big Space of States
 The difficulty of the game is to model his big space of game states.
