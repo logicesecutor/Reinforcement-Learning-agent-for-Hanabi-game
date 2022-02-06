@@ -115,7 +115,7 @@ class Agent:
         # If I have already discovered enough states I want to reconduce the actual state in an already known one
         # by computing his distance with all the already known states. 
         # The idea was that similar states are spatially near
-        if len(self.Q_table) > self.MAX_NO_STATES:
+        if self.new_state not in self.Q_table.keys() and len(self.Q_table) > self.MAX_NO_STATES:
             self.new_state = self.find_nearest_state(self.new_state, self.Q_table)
 
         elif self.new_state not in self.Q_table.keys():
