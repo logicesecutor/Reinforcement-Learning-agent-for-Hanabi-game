@@ -230,25 +230,14 @@ class Agent:
 
         assert self.data
         assert len(self.players_actions) <= self.num_players
-
-        # Reset the set of actions that bring us to this State
-        # TODO: FIXXXXX Clear Only if is a valid action
-        if self.valid_action:
-            self.players_actions.clear()
-            self.total_reward = 0
-        self.valid_action = True
-        
+    
         # Evaluate the actual state of the game from the point of view of the player
         self.new_state = self.evaluate_state(self.data)
 
         # ================ Update the actions and reward ==========
         # If the old state isn't in the reward table( this should happend only for the first state of the game which is empty )
         # we add that state to the table and save the new total reward
-        # if self.old_state not in self.reward_table.keys():
-        #     self.reward_table[self.old_state] = dict()
-        #     #self.Q_table[self.old_state] = dict()
-
-        # self.reward_table[self.old_state][tuple(self.players_actions)] = self.total_reward    
+         
         #========================================
 
         # ======== Discover a state and Update the data structures which contains the states =======
@@ -258,29 +247,23 @@ class Agent:
         if len(self.Q_table) > self.MAX_NO_STATES:
             self.new_state = self.find_nearest_state(self.new_state, self.Q_table)
 
-        if self.new_state not in self.Q_table.keys():
-            # Add the new state row in the table
+        elif self.new_state not in self.Q_table.keys():
+            # Add the new state row in the Q-table
             self.Q_table[self.new_state] = dict()
-            # Update the immediate reward table with the new rewars for this state
-            if self.new_state not in self.reward_table.keys():
-                self.reward_table[self.new_state] = dict()
+            # Update the immediate reward table with the new reward for this state
+            self.reward_table[self.new_state] = dict()
             # Add the new edge in the graph of reachable state
-            if not self.state_graph.has_edge(self.old_state, self.new_state):
+            if not self.state_graph.has_edge(self.old_state, self.new_state) and not self.old_state.empty:
                 self.state_graph.add_edge(self.old_state, self.new_state)
         # ===========================================================================================
 
-        # Update the local Q-function at the previous time (T-1)
         if not self.old_state.empty:
             self.reward_table[self.old_state][tuple(self.players_actions)] = self.total_reward
+            # Update the local Q-function at the previous time (T-1)
             self.update_Q_table_Previous(self.new_state, self.old_state, tuple(self.players_actions))
             
         new_action = self.pick_an_action(self.new_state)
         
-        # In order to discard the useless card i need to increment the counter "age"
-        # which keeps track of how many time that card remains in my hand
-        self.ageMyCardsBelief()
-        self.old_state = self.new_state     
-
         return self.buildReadableAction(new_action)
     
 
@@ -298,9 +281,31 @@ class Agent:
         
         LOSS = self.gamma * Q_value_for_joint_action - current_q_value
 
-        
         # Bellman equation for reinforcement learning 
         self.Q_table[old_state][set_of_action] = (1-self.alpha) * current_q_value + self.alpha * (R + LOSS)
+
+
+    def removeEntries(self):
+        pass
+        # if self.new_state in self.Q_table.keys():
+        #     if self.Q_table[self.new_state]=={}:
+        #         del self.Q_table[self.new_state]
+        #     if self.reward_table[self.new_state]=={}:
+        #         del self.reward_table[self.new_state]
+        #if self.state_graph.has_edge(self.old_state, self.new_state):
+        #self.state_graph.remove_edge(self.old_state, self.new_state)
+
+    
+    def resetPLayerActions(self):
+        # In order to discard the useless card i need to increment the counter "age"
+        # which keeps track of how many time that card remains in my hand
+        self.ageMyCardsBelief()
+        self.old_state = self.new_state     
+
+        # Reset the set of actions that bring us to this State
+        self.players_actions.clear()
+        self.total_reward = 0
+
 
     def ageMyCardsBelief(self):
         """

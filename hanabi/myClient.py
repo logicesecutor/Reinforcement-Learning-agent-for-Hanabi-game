@@ -86,7 +86,8 @@ def manageInput():
                 
             except:
                 print("Maybe you wanted to type 'discard <num>'?")
-                agent.valid_action = False
+                
+                agent.removeEntries()
                 getInput_event.set()
                 continue
         elif command.split(" ")[0] == "play" and status == statuses[1]:
@@ -99,7 +100,8 @@ def manageInput():
 
             except:
                 print("Maybe you wanted to type 'play <num>'?")
-                agent.valid_action = False
+                
+                agent.removeEntries()
                 getInput_event.set()
                 continue
         elif command.split(" ")[0] == "hint" and status == statuses[1]:
@@ -108,7 +110,6 @@ def manageInput():
                 t = command.split(" ")[1].lower()
                 if t != "colour" and t != "color" and t != "value":
                     print("Error: type can be 'color' or 'value'")
-                    agent.valid_action = False
                     getInput_event.set()
                     continue
                 value = command.split(" ")[3].lower()
@@ -116,13 +117,15 @@ def manageInput():
                     value = int(value)
                     if int(value) > 5 or int(value) < 1:
                         print("Error: card values can range from 1 to 5")
-                        agent.valid_action = False
+
+                        agent.removeEntries()
                         getInput_event.set()
                         continue
                 else:
                     if value not in ["green", "red", "blue", "yellow", "white"]:
                         print("Error: card color can only be green, red, blue, yellow or white")
-                        agent.valid_action = False
+                        
+                        agent.removeEntries()
                         getInput_event.set()
                         continue
 
@@ -130,7 +133,6 @@ def manageInput():
 
             except:
                 print("Maybe you wanted to type 'hint <type> <destinatary> <value>'?")
-                agent.valid_action = False
                 getInput_event.set()
                 continue
         elif command == "":
@@ -138,7 +140,6 @@ def manageInput():
             getInput_event.set()
         else:
             print("Unknown command: " + command)
-            agent.valid_action = False
             getInput_event.set()
             continue
         stdout.flush()
@@ -203,16 +204,21 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             # If is my turn
             if data.currentPlayer == playerName:
                 getInput_event.set()
-
         #=========================================================================
+
         # Data Update Request
         if type(data) is GameData.ServerGameStateDataUpdate:
             # This is an update packet that each agent receives each time another agent
             # make an action
             dataOk = True
+
+            if agent.valid_action:
+               agent.resetPLayerActions()
+            agent.valid_action = False
+            
             agent.update_data(data)
             agent.update_players_action(data.players_action)
-
+            
             agent.myturn = True if data.currentPlayer == agent.name else False
             if agent.myturn:
                 getInput_event.set()
@@ -225,10 +231,12 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Invalid action performed. Reason:")
             print(data.message)
             
-            # Reset the event to obtain a new action
             agent.valid_action = False
-
+            agent.removeEntries()
+            
+            # Reset the event to obtain a new action
             getInput_event.set()
+        #=========================================================================
 
         # A discard succesfully make
         if type(data) is GameData.ServerActionValid:
@@ -236,8 +244,11 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Action valid!")
             print("Current player: " + data.player)
 
+            
             if data.lastPlayer == agent.name:
+                agent.valid_action = True
                 s.send(GameData.ClientGetGameStateUpdateRequest(data.lastPlayer, "discard", chosen_action).serialize())
+        #=========================================================================
 
         # A play succesfully make
         if type(data) is GameData.ServerPlayerMoveOk:
@@ -246,7 +257,9 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Current player: " + data.player)
              
             if data.lastPlayer == agent.name:
+                agent.valid_action = True
                 s.send(GameData.ClientGetGameStateUpdateRequest(data.lastPlayer, "play good").serialize())
+        #=========================================================================
 
         # A play un-succesfully make
         if type(data) is GameData.ServerPlayerThunderStrike:
@@ -254,8 +267,11 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("OH NO! The Gods are unhappy with you!")
 
             if data.lastPlayer == agent.name:
+                agent.valid_action = True
                 s.send(GameData.ClientGetGameStateUpdateRequest(data.lastPlayer, "play bad", chosen_action).serialize())
-
+        #=========================================================================
+        
+        # A succesfull hint
         if type(data) is GameData.ServerHintData:
             dataOk = True
  
@@ -278,8 +294,9 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             # I sent the other players the update packet but only if I am the generator of the hint 
             # I forward to all of them, indeed tha agent will only update his info
             if data.source == agent.name:
+                agent.valid_action = True
                 s.send(GameData.ClientGetGameStateUpdateRequest(data.source, "hint"+quality).serialize()) 
-            #==========================================
+        #=========================================================================
 
         if type(data) is GameData.ServerInvalidDataReceived:
             # Turn is not changed
@@ -287,6 +304,8 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print(data.data)
             # Reset the event to obtain another input from the agent
             agent.valid_action = False
+            agent.removeEntries()
+
             getInput_event.set()
 
 
@@ -310,8 +329,10 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
             agent.gameOver = True
             #status = "Lobby"
-
+            
+            # For Future versions
             #s.send(GameData.WaitOtherPlayerRequest(agent.name).serialize())
+
             getInput_event.set()
             
 

@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 MAX_TRAINING_EPOCH = 100
 PENALTY_INCREMENT_CONDITION = 100
 directoryName = "python ./hanabi/"
-numPlayer = 5
+numPlayer = 2
 epsylon = 1
 
 clean_all_training = False
@@ -16,10 +16,6 @@ penality = 0
 if os.path.exists("game.log"):
     os.remove("game.log")
 
-# if clean_all_training:
-#     for i in range(1,6):
-#         if os.path.exists(directoryName+"models/Agent_"+str(i)):
-#             os.remove(directoryName+"models/Agent_"+str(i))
 
 for i in range(MAX_TRAINING_EPOCH):
     
