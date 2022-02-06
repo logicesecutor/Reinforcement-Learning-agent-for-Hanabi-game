@@ -1,7 +1,4 @@
-from argparse import Action
 from copy import deepcopy
-from msilib.schema import Class
-from re import L 
 import networkx as nx
 import GameData
 from collections import Counter
@@ -234,12 +231,6 @@ class Agent:
         # Evaluate the actual state of the game from the point of view of the player
         self.new_state = self.evaluate_state(self.data)
 
-        # ================ Update the actions and reward ==========
-        # If the old state isn't in the reward table( this should happend only for the first state of the game which is empty )
-        # we add that state to the table and save the new total reward
-         
-        #========================================
-
         # ======== Discover a state and Update the data structures which contains the states =======
         # If I have already discovered enough states I want to reconduce the actual state in an already known one
         # by computing his distance with all the already known states. 
@@ -252,19 +243,23 @@ class Agent:
             self.Q_table[self.new_state] = dict()
             # Update the immediate reward table with the new reward for this state
             self.reward_table[self.new_state] = dict()
-            # Add the new edge in the graph of reachable state
-            if not self.state_graph.has_edge(self.old_state, self.new_state) and not self.old_state.empty:
-                self.state_graph.add_edge(self.old_state, self.new_state)
+        
+        # Add the new edge in the graph of reachable state
+        if not self.state_graph.has_edge(self.old_state, self.new_state) and not self.old_state.empty:
+            self.state_graph.add_edge(self.old_state, self.new_state)
         # ===========================================================================================
-
+        
+        # ================ Update the actions and reward ==========
+        # If the old state isn't in the reward table( this should happend only for the first state of the game which is empty )
+        # we add that state to the table and save the new total reward
         if not self.old_state.empty:
             self.reward_table[self.old_state][tuple(self.players_actions)] = self.total_reward
             # Update the local Q-function at the previous time (T-1)
             self.update_Q_table_Previous(self.new_state, self.old_state, tuple(self.players_actions))
-            
-        new_action = self.pick_an_action(self.new_state)
-        
-        return self.buildReadableAction(new_action)
+        #========================================
+
+
+        return self.buildReadableAction(self.pick_an_action(self.new_state))
     
 
     def update_Q_table_Previous(self, new_state, old_state, set_of_action):
@@ -286,14 +281,13 @@ class Agent:
 
 
     def removeEntries(self):
-        pass
-        # if self.new_state in self.Q_table.keys():
-        #     if self.Q_table[self.new_state]=={}:
-        #         del self.Q_table[self.new_state]
-        #     if self.reward_table[self.new_state]=={}:
-        #         del self.reward_table[self.new_state]
-        #if self.state_graph.has_edge(self.old_state, self.new_state):
-        #self.state_graph.remove_edge(self.old_state, self.new_state)
+        if not self.old_state.empty:
+            if tuple(self.players_actions) in self.reward_table[self.old_state]:
+                del self.reward_table[self.old_state][tuple(self.players_actions)]
+            if tuple(self.players_actions) in self.Q_table[self.old_state]:
+                del self.Q_table[self.old_state][tuple(self.players_actions)]
+            if self.state_graph.has_edge(self.old_state, self.new_state):
+                self.state_graph.remove_edge(self.old_state, self.new_state)
 
     
     def resetPLayerActions(self):
