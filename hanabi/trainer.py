@@ -5,10 +5,10 @@ import pickle
 import matplotlib.pyplot as plt
 
 MAX_TRAINING_EPOCH = 1000
-MAX_STATES = 500
+MAX_STATES = 100000
 PENALTY_INCREMENT_CONDITION = 100
 directoryName = "python ./hanabi/"
-numPlayer = 2
+numPlayer = 5
 epsylon = 1
 
 clean_all_training = False
@@ -40,7 +40,7 @@ clean_all_training = False
 
 grp = None
 
-directory_name = "H:/Universita/Computationa Intelligence/Exam project/CI_exam_project_hanabi/hanabi/models/Agent_1/"
+directory_name = "H:/Universita/Computationa Intelligence/Exam project/CI_exam_project_hanabi/hanabi/models/Agent_3/"
 
 with open(directory_name + "state_graph.pkl", "rb") as f:
     grp = pickle.load( f)

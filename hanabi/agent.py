@@ -164,6 +164,7 @@ class Agent:
         # Bellman equation for reinforcement learning 
         self.Q_table[old_state][set_of_action] = (1-self.alpha) * current_q_value + self.alpha * (R + LOSS)
 
+
     def find_nearest_state(self, state:State, Q_table: dict) -> State:
         """Finds a near state to the given state"""
         minim = 10000000
@@ -210,6 +211,56 @@ class Agent:
                 return self.table_score(data)
                     
         return 0
+        
+
+    def pick_an_action(self, state) -> int:
+        """Epsylon greedy exploration"""
+        if random() > self.epsylon:
+            # Choose exploitation
+            #possibleStates = [edge[1] for edge in self.state_graph.out_edges(state)]
+            res = max({k:v for k, v in self.Q_table[state].items() if k!="state"}, key=self.Q_table[state].get, default=())
+            if res == ():
+                # In this case I don't have an available action so I choose exploration because we have too few experience on that particular state
+                return randrange(len(self.actions))
+
+            return res[0]
+            
+        else:
+            # Choose exploration
+            return randrange(len(self.actions))
+
+    
+    def getCommand(self, status, wait_operations_finish):
+
+        res = ""
+
+        if self.agent_current_game_state == "Lobby" and status == "Lobby":
+            self.agent_current_game_state = "Game"
+            res = "ready"
+
+        elif self.agent_current_game_state == "Game" and status == "Game":
+            self.agent_current_game_state = "Learning"
+            res = "show"
+
+        elif self.agent_current_game_state == "Learning" and status == "Game" and not self.gameOver:
+            res = self.learn()
+
+        # if self.gameOver and self.matchCounter < self.MAX_TRAINING_EPOCH:
+            
+        #     self.resetStates()
+        #     self.agent_current_game_state = "Game"
+        #     status = "Lobby"
+        #     res = "ready"
+        #     self.epsylon -= self.exploit_explore_rate
+            # wait_operations_finish.wait()
+            # wait_operations_finish.clear()
+
+        elif self.gameOver:# and self.matchCounter >= self.MAX_TRAINING_EPOCH:
+            self.saveLearning()
+            
+            res= "exit"
+
+        return res
 
 
     def count_played_cards(self,data:GameData.ServerGameStateData):
@@ -433,6 +484,7 @@ class Agent:
            
         return "hint "+action+" "+saved_player+" "+str(saved_value)
 
+
     def is_alreadyOnTable(self, card_value, card_color):
         """ Tells if a card is already on the table card """
         for color_pile, cards in self.data.tableCards.items():
@@ -501,54 +553,7 @@ class Agent:
         return "discard " + str(self.my_cards_info.index(res))
             
 
-    def pick_an_action(self, state) -> int:
-        """Epsylon greedy exploration"""
-        if random() > self.epsylon:
-            # Choose exploitation
-            #possibleStates = [edge[1] for edge in self.state_graph.out_edges(state)]
-            res = max({k:v for k, v in self.Q_table[state].items() if k!="state"}, key=self.Q_table[state].get, default=())
-            if res == ():
-                # In this case I don't have an available action so I choose exploration because we have too few experience on that particular state
-                return randrange(len(self.actions))
-
-            return res[0]
-            
-        else:
-            # Choose exploration
-            return randrange(len(self.actions))
-
     
-    def getCommand(self, status, wait_operations_finish):
-
-        res = ""
-
-        if self.agent_current_game_state == "Lobby" and status == "Lobby":
-            self.agent_current_game_state = "Game"
-            res = "ready"
-
-        elif self.agent_current_game_state == "Game" and status == "Game":
-            self.agent_current_game_state = "Learning"
-            res = "show"
-
-        elif self.agent_current_game_state == "Learning" and status == "Game" and not self.gameOver:
-            res = self.learn()
-
-        # if self.gameOver and self.matchCounter < self.MAX_TRAINING_EPOCH:
-            
-        #     self.resetStates()
-        #     self.agent_current_game_state = "Game"
-        #     status = "Lobby"
-        #     res = "ready"
-        #     self.epsylon -= self.exploit_explore_rate
-            # wait_operations_finish.wait()
-            # wait_operations_finish.clear()
-
-        elif self.gameOver:# and self.matchCounter >= self.MAX_TRAINING_EPOCH:
-            self.saveLearning()
-            
-            res= "exit"
-
-        return res
 
 
     def saveLearning(self):
