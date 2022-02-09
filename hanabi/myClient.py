@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from sys import argv, stdout
-from threading import Thread, Lock, Event
+from threading import Thread, Event
 
 import GameData
 import socket
@@ -15,29 +15,29 @@ wait_operations_finish = Event()
 getInput_event = Event()
 getInput_event.set()
 
-if len(argv) == 3:
+if len(argv) == 4:
     playerName = argv[1]
     epsilon = float(argv[2])
+    n_state = int(argv[3])
     ip = HOST
     port = PORT
 
 elif len(argv) == 1:
-    print("You need the player name to start the game.")
     #exit(-1)
     playerName = "Test" # For debug
     ip = HOST
     epsilon = 1.0
+    n_state=1000
     port = PORT
 
 else:
-    playerName = argv[3]
-    ip = argv[1]
-    port = float(argv[2])
+    print("You need the player name to start the game.")
+    print("Error on number of parameters")
 
 run = True
 
 
-agent = Agent(playerName, epsilon)
+agent = Agent(playerName, epsilon, n_state)
 chosen_action = 'None'
 statuses = ["Lobby", "Game", "GameHint"]
 
@@ -317,6 +317,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         #     if agent.otherPlayerEnded == agent.num_players:
         #         wait_operations_finish.set()
         #         getInput_event.set()
+
             
         if type(data) is GameData.ServerGameOver:
             dataOk = True

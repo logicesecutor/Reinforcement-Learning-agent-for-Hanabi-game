@@ -16,6 +16,7 @@ class State:
         self.playersHand = playersHand
         self.myHand = myHand
         self.empty = empty
+        self.stateHash = self.__hash__()
 
 
     # Use LSH -> modify this hashing function to implement the locality sesitive hashing
@@ -49,7 +50,7 @@ class Agent:
     actions = {"play": 0, "discard": 1, "hint": 2}
     N_ACTIONS = len(actions)
 
-    MAX_NO_STATES = 1
+    MAX_NO_STATES = 1000
     MAX_TRAINING_EPOCH = 1
 
     color_value = {"blue": 0, "green": 1, "red": 2, "white": 3, "yellow": 4}
@@ -65,14 +66,14 @@ class Agent:
     exploit_explore_rate = (1 / MAX_TRAINING_EPOCH) * 2
     gamma = 0.9 # Importance of future actions
 
-    def __init__(self, playerName, epsylon=1) -> None:
+    def __init__(self, playerName, epsylon=1, n_state=1000) -> None:
 
         self.Q_table = dict() 
         self.reward_table = dict()
         self.state_graph = nx.DiGraph()
         
         self.agent_current_game_state = "Lobby"
-                
+        
         #======================
         self.num_players = None
         self.my_cards_info = None
@@ -83,6 +84,7 @@ class Agent:
 
         self.data = None
         self.name = playerName
+        self.MAX_NO_STATES = n_state
 
         #======================
         self.old_state = State(empty=True) #Generate empty State
@@ -117,18 +119,18 @@ class Agent:
         # If I have already discovered enough states I want to reconduce the actual state in an already known one
         # by computing his distance with all the already known states. 
         # The idea was that similar states are spatially near
-        if hash(self.new_state) not in self.Q_table.keys() and len(self.Q_table) > self.MAX_NO_STATES:
+        if self.new_state.stateHash not in self.Q_table.keys() and len(self.Q_table) > self.MAX_NO_STATES:
             self.new_state = self.find_nearest_state(self.new_state, self.Q_table)
 
-        elif self.new_state not in self.Q_table.keys():
+        elif self.new_state.stateHash not in self.Q_table.keys():
             # Add the new state row in the Q-table
-            self.Q_table[hash(self.new_state)] = dict()
+            self.Q_table[self.new_state.stateHash] = {"state":(self.new_state.tableCards, self.new_state.playersHand, self.new_state.myHand)}
             # Update the immediate reward table with the new reward for this state
-            self.reward_table[hash(self.new_state)] = dict()
+            self.reward_table[self.new_state.stateHash] = {"state":(self.new_state.tableCards, self.new_state.playersHand, self.new_state.myHand)}
         
         # Add the new edge in the graph of reachable state
-        if not self.state_graph.has_edge(hash(self.old_state), hash(self.new_state)) and not self.old_state.empty:
-            self.state_graph.add_edge(hash(self.old_state), hash(self.new_state))
+        if not self.state_graph.has_edge(self.old_state.stateHash, self.new_state.stateHash) and not self.old_state.empty:
+            self.state_graph.add_edge(self.old_state.stateHash, self.new_state.stateHash)
         # ===========================================================================================
         
         # ================ Update the actions and reward ==========
@@ -136,13 +138,13 @@ class Agent:
         # we add that state to the table and save the new total reward
         if not self.old_state.empty:
             # Add the total reward to the previous state-action pair
-            self.reward_table[hash(self.old_state)][tuple(self.players_actions)] = self.total_reward
+            self.reward_table[self.old_state.stateHash][tuple(self.players_actions)] = self.total_reward
             # Update the local Q-function at the previous time (T-1)
-            self.update_Q_table_Previous(hash(self.new_state), hash(self.old_state), tuple(self.players_actions))
+            self.update_Q_table_Previous(self.new_state.stateHash, self.old_state.stateHash, tuple(self.players_actions))
         #========================================
 
 
-        return self.buildReadableAction(self.pick_an_action(hash(self.new_state)))
+        return self.buildReadableAction(self.pick_an_action(self.new_state.stateHash))
     
 
     def update_Q_table_Previous(self, new_state, old_state, set_of_action):
@@ -155,7 +157,7 @@ class Agent:
 
         R = self.reward_table[old_state][set_of_action]
 
-        Q_value_for_joint_action = max(self.Q_table[new_state].values(), default=0)
+        Q_value_for_joint_action = max({k:v for k, v in self.Q_table[new_state].items() if k!="state"}.values(), default=0)
         
         LOSS = self.gamma * Q_value_for_joint_action - current_q_value
 
@@ -168,12 +170,14 @@ class Agent:
         saved_state = None
         global clustering
 
-        for s in Q_table.keys():
-            dist = state.distance(s)
+        for s in Q_table.values():
+            tc, ph, mh = s["state"]
+            temp_state = State(tableCards=tc, playersHand=ph, myHand=mh)
+            dist = state.distance(temp_state)
 
             if dist < minim:
                 minim = dist
-                saved_state = s
+                saved_state = deepcopy(temp_state)
         
         return saved_state
 
@@ -285,12 +289,12 @@ class Agent:
 
     def removeEntries(self):
         if not self.old_state.empty:
-            if tuple(self.players_actions) in self.reward_table[hash(self.old_state)]:
-                del self.reward_table[hash(self.old_state)][tuple(self.players_actions)]
-            if tuple(self.players_actions) in self.Q_table[hash(self.old_state)]:
-                del self.Q_table[hash(self.old_state)][tuple(self.players_actions)]
-            if self.state_graph.has_edge(hash(self.old_state), hash(self.new_state)):
-                self.state_graph.remove_edge(hash(self.old_state), hash(self.new_state))
+            if tuple(self.players_actions) in self.reward_table[self.old_state.stateHash]:
+                del self.reward_table[self.old_state.stateHash][tuple(self.players_actions)]
+            if tuple(self.players_actions) in self.Q_table[self.old_state.stateHash]:
+                del self.Q_table[self.old_state.stateHash][tuple(self.players_actions)]
+            if self.state_graph.has_edge(self.old_state.stateHash, self.new_state.stateHash):
+                self.state_graph.remove_edge(self.old_state.stateHash, self.new_state.stateHash)
 
     
     def resetPLayerActions(self):
@@ -502,7 +506,7 @@ class Agent:
         if random() > self.epsylon:
             # Choose exploitation
             #possibleStates = [edge[1] for edge in self.state_graph.out_edges(state)]
-            res = max(self.Q_table[state], key=self.Q_table[state].get, default=())
+            res = max({k:v for k, v in self.Q_table[state].items() if k!="state"}, key=self.Q_table[state].get, default=())
             if res == ():
                 # In this case I don't have an available action so I choose exploration because we have too few experience on that particular state
                 return randrange(len(self.actions))
