@@ -35,9 +35,3 @@ To solve this problem the state evaluation is divided in three parts:
   - Each player is evaluated not using the cards that it have in his hand at evaluation time but the score that it can perform if play all his card
 - One number to evaluate my hand:
   - Is evaluated based on a statistical version of my hand and then a score is computed in the same way of the other players
-
-
-## Conclusion
-My conclusion is that it doesn't work at all. I have a bug that ends the training session right in the middle and because of that I cannot perform statistics on the results. I am not able to remove it.
-
-I am not happy with that because I spent a lot of time and effort on this project.
