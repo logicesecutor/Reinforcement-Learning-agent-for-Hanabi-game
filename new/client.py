@@ -7,17 +7,13 @@ import socket
 from constants import *
 import os
 
-if len(argv) == 2:
-    playerName = argv[1]
-    ip = HOST
-    port = PORT
-elif len(argv) == 1:
+
+if len(argv) < 4:
     print("You need the player name to start the game.")
     #exit(-1)
     playerName = "Test" # For debug
     ip = HOST
     port = PORT
-
 else:
     playerName = argv[3]
     ip = argv[1]
@@ -34,7 +30,6 @@ hintState = ("", "")
 def manageInput():
     global run
     global status
-
     while run:
         command = input()
         # Choose data to send
@@ -115,14 +110,13 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Game start!")
             s.send(GameData.ClientPlayerReadyData(playerName).serialize())
             status = statuses[1]
-
-
         if type(data) is GameData.ServerGameStateData:
             dataOk = True
             print("Current player: " + data.currentPlayer)
             print("Player hands: ")
             for p in data.players:
                 print(p.toClientString())
+            print("Cards in your hand: " + str(data.handSize))
             print("Table cards: ")
             for pos in data.tableCards:
                 print(pos + ": [ ")
@@ -134,8 +128,6 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 print("\t" + c.toClientString())            
             print("Note tokens used: " + str(data.usedNoteTokens) + "/8")
             print("Storm tokens used: " + str(data.usedStormTokens) + "/3")
-
-
         if type(data) is GameData.ServerActionInvalid:
             dataOk = True
             print("Invalid action performed. Reason:")

@@ -3,9 +3,9 @@ import sys
 from typing import List
 
 
-
 CARDS_COLORS = ["red", "yellow", "white", "green", "blue"]
 CARDS_VALUES = {1:3, 2:2, 3:2, 4:2, 5:1}
+
 
 class Card:
     def __init__(self, color, value) -> None:
@@ -17,6 +17,11 @@ class Player:
     def __init__(self, name, hand: List[Card]) -> None:
         self.name = name
         self.hand = hand
+
+class GameSession:
+
+    def __init__(self) -> None:
+        pass
 
 class GameManager:
 
@@ -37,9 +42,9 @@ class GameManager:
 
     def create_hand(self, n_player: int, card_pile: list):
         if n_player > 1 and n_player < 4:
-            n_card_to_assign = 4
-        elif n_player > 3 and n_player < 5:
             n_card_to_assign = 5
+        elif n_player > 3 and n_player < 5:
+            n_card_to_assign = 4
         else:
             print("Error on number of player", file=sys.stderr)
             return 
@@ -47,9 +52,19 @@ class GameManager:
         return [card_pile.pop() for _ in range(n_card_to_assign) ]
 
 
+    def StartGame(self):
+        pass
+
+    def Stop(self):
+        pass
+
+
 if  __name__ == "__main__":
 
     players_name = ["mario", "giovanni", "marco"]
     gm = GameManager(players_name)
+    gm.StartGame()
 
-    print()
+    command = input()
+    if command == "stop":
+        gm.Stop()

@@ -1,20 +1,20 @@
 import os
-
-from numpy import single
 import GameData
 import socket
 from game import Game
 from game import Player
 import threading
 from constants import *
+from signal import signal, SIGPIPE, SIG_DFL
 import logging
 import sys
-
 
 mutex = threading.Lock()
 # SERVER
 playerConnections = {}
 game = Game()
+
+mutex = threading.Lock()
 
 playersOk = []
 
@@ -27,12 +27,10 @@ status = statuses[0]
 commandQueue = {}
 numPlayers = 2
 
+
 def manageConnection(conn: socket, addr):
     global status
     global game
-    global playersOk
-    global commandQueue
-    
     with conn:
         logging.info("Connected by: " + str(addr))
         keepActive = True
@@ -40,7 +38,9 @@ def manageConnection(conn: socket, addr):
         while keepActive:
             print("SERVER WAITING")
             data = conn.recv(DATASIZE)
+
             mutex.acquire(True)
+
             if not data:
                 del playerConnections[playerName]
                 logging.warning("Player disconnected: " + playerName)
@@ -50,7 +50,8 @@ def manageConnection(conn: socket, addr):
                     os._exit(0)
                 keepActive = False
             else:
-                print(f"SERVER PROCESSING {GameData.GameData.deserialize(data)}")
+                print(
+                    f"SERVER PROCESSING {GameData.GameData.deserialize(data)}")
                 data = GameData.GameData.deserialize(data)
                 print(f"SERVER RECEIVED {type(data)} from {data.sender}")
                 if status == "Lobby":
@@ -59,7 +60,8 @@ def manageConnection(conn: socket, addr):
                         commandQueue[playerName] = []
                         if playerName in playerConnections.keys() or playerName == "" and playerName is None:
                             logging.warning("Duplicate player: " + playerName)
-                            conn.send(GameData.ServerActionInvalid("Player with that name already registered.").serialize())
+                            conn.send(GameData.ServerActionInvalid(
+                                "Player with that name already registered.").serialize())
                             mutex.release()
                             return
                         playerConnections[playerName] = (conn, addr)
@@ -70,7 +72,9 @@ def manageConnection(conn: socket, addr):
                     elif type(data) is GameData.ClientPlayerStartRequest:
                         game.setPlayerReady(playerName)
                         logging.info("Player ready: " + playerName)
-                        conn.send(GameData.ServerPlayerStartRequestAccepted(len(game.getPlayers()), game.getNumReadyPlayers()).serialize())
+                        conn.send(GameData.ServerPlayerStartRequestAccepted(
+                            len(game.getPlayers()), game.getNumReadyPlayers()).serialize())
+
                         if len(game.getPlayers()) == game.getNumReadyPlayers() and len(game.getPlayers()) >= numPlayers:
                             listNames = []
                             for player in game.getPlayers():
@@ -81,6 +85,7 @@ def manageConnection(conn: socket, addr):
                                 playerConnections[player][0].send(
                                     GameData.ServerStartGameData(listNames).serialize())
                             game.start()
+
                     # This ensures every player is ready to send requests
                     elif type(data) is GameData.ClientPlayerReadyData:
                         playersOk.append(1)
@@ -110,38 +115,22 @@ def manageConnection(conn: socket, addr):
                     singleData, multipleData = game.satisfyRequest(
                         data, playerName)
                     if singleData is not None:
-                        #====================================
-                        if type(singleData) is list:
-                            for i, id in enumerate(playerConnections):
-                                playerConnections[id][0].send(
-                                    singleData[i].serialize())
-                        #====================================
-                        else:
-                            conn.send(singleData.serialize())
-
+                        conn.send(singleData.serialize())
                     if multipleData is not None:
                         for id in playerConnections:
                             playerConnections[id][0].send(
                                 multipleData.serialize())
-
-                            if game.isGameOver():# and game.playerEnded == len(game.getPlayers()):
+                            if game.isGameOver():
                                 logging.info("Game over")
                                 logging.info("Game score: " +
                                              str(game.getScore()))
                                 # os._exit(0)
-                                #=============================
-                                # players = game.getPlayers()
-                                # status = "Lobby"
-                                # playersOk.clear()
-                                # #game.playerEnded = 0
-                                # game = Game()
-                                # for player in players:
-                                #     logging.info("Starting new game")
-                                #     player.ready = False
-                                #     game.addPlayer(player.name)
-                                #     commandQueue[player.name] = []
-                                #==============================
-                                # game.start()
+                                players = game.getPlayers()
+                                game = Game()
+                                for player in players:
+                                    logging.info("Starting new game")
+                                    game.addPlayer(player.name)
+                                game.start()
             mutex.release()
 
 
@@ -155,6 +144,7 @@ def manageInput():
 
 def manageNetwork():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind((HOST, PORT))
         logging.info("Hanabi server started on " + HOST + ":" + str(PORT))
         while True:
@@ -175,6 +165,7 @@ def start_server(nplayers):
 
 
 if __name__ == '__main__':
+    signal(SIGPIPE, SIG_DFL)
     print("Type 'exit' to end the program")
     if len(sys.argv) > 1:
         if int(sys.argv[1]) > 1:
