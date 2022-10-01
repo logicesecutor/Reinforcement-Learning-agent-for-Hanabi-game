@@ -210,8 +210,6 @@ def manageServerInput():
 
 def start_server():
 
-    #global kill_threads
-
     logging.basicConfig(filename="game.log", level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s',
                         datefmt="%m/%d/%Y %I:%M:%S %p")
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
@@ -223,8 +221,6 @@ def start_server():
         activeThreads.append(networkThread)
         
         ret_value = manageServerInput()
-        #KILL ALL THREADS
-        #kill_threads.set()
         
         if  ret_value == "restart": break#continue
         elif ret_value == "exit": sys.exit("Server Closed")

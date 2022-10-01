@@ -2,7 +2,7 @@ import os
 import GameData
 import socket
 from game import Game
-from game import Player
+
 import threading
 from constants import *
 from signal import signal, SIGPIPE, SIG_DFL
@@ -31,6 +31,7 @@ numPlayers = 2
 def manageConnection(conn: socket, addr):
     global status
     global game
+    
     with conn:
         logging.info("Connected by: " + str(addr))
         keepActive = True
