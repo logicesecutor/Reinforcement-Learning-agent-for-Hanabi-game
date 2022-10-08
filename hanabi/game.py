@@ -159,8 +159,6 @@ class Game(object):
         self.__players = []
         self.__currentPlayer = 0
 
-        #self.playerEnded = 0
-
         # init game
         self.__started = False
         self.__lastTurn = False
@@ -174,11 +172,6 @@ class Game(object):
         self.__dataActions[GameData.ClientPlayerPlayCardRequest] = self.__satisfyPlayCardRequest
         self.__dataActions[GameData.ClientHintData] = self.__satisfyHintRequest
 
-        #===================================
-        self.__dataActions[GameData.ClientGetGameStateUpdateRequest] = self.__satisfyShowCardUpdateRequest
-        self.__dataActions[GameData.WaitOtherPlayerRequest] = self._satisfyWaitOtherPlayerRequest
-        #===================================
-
     # Request satisfaction methods
     # Each method produces a tuple of ServerToClientData derivates
     # where the first element is the one to send to a single player, while the second one has to be sent to all players
@@ -187,15 +180,13 @@ class Game(object):
         if type(data) in self.__dataActions:
             if type(data) == GameData.ClientGetGameStateRequest:
                 data.sender = playerName
-
             result = self.__dataActions[type(data)](data)
             if type(data) != GameData.ClientGetGameStateRequest:
                 if len(self.__cardsToDraw) == 0:
                     self.__lastTurn = True
                     self.__lastMoves -= 1
             self.__gameOver, self.__score = self.__checkGameEnded()
-
-            if self.__gameOver: #and self.playerEnded == len(self.getPlayers()):
+            if self.__gameOver:
                 logging.info("Game over, people.")
                 logging.info("Please, close the server now")
                 logging.info("Score: " + str(self.__score) + "; message: " +
@@ -228,32 +219,12 @@ class Game(object):
         else:
             return (GameData.ServerActionInvalid("It is not your turn yet"), None)
 
-    
+    # Show request
     def __satisfyShowCardRequest(self, data: GameData.ClientGetGameStateRequest):
         logging.info("Showing hand to: " + data.sender)
-        currentPlayer, playerList = self.__getPlayersStatus(data.sender)
-        return (GameData.ServerGameStateData(currentPlayer, playerList, self.__noteTokens, self.__stormTokens, self.__tableCards, self.__discardPile), None)
+        currentPlayer, playerList, playerHandSize = self.__getPlayersStatus(data.sender)
+        return (GameData.ServerGameStateData(currentPlayer, playerHandSize, playerList, self.__noteTokens, self.__stormTokens, self.__tableCards, self.__discardPile), None)
 
-
-
-    #==============================
-    # Data Update request
-    def __satisfyShowCardUpdateRequest(self, data: GameData.ClientGetGameStateUpdateRequest):
-        logging.info("Player "+ data.sender +" did action: "+ data.players_action +"\nUpdating local game data of all players" )
-
-        playerUpdateList = []
-        for player in self.__players:
-            currentPlayer, playerList = self.__getPlayersStatus(player.name)
-            playerUpdateList.append(GameData.ServerGameStateDataUpdate(currentPlayer, playerList, data.players_action, self.__noteTokens, self.__stormTokens, self.__tableCards, self.__discardPile, data.index))
-
-        return (playerUpdateList, None)
-
-    def _satisfyWaitOtherPlayerRequest(self, data: GameData.WaitOtherPlayerRequest):
-        #self.playerEnded += 1
-        return (None, GameData.ServerWaitOtherPlayer(data.sender))
-    #==============================
-    
-    
     # Play card request
 
     def __satisfyPlayCardRequest(self, data: GameData.ClientPlayerPlayCardRequest):
@@ -376,15 +347,17 @@ class Game(object):
 
     def __getPlayersStatus(self, currentPlayerName):
         players = []
+        handSize = 0
         for p in self.__players:
             #! I WANT ALSO THE ABSOLUTE ORDER OF PLAYERS
             if p.name == currentPlayerName:  # ! we don't want to cheat
                 # ! so we build an 'empty' Player object for the requesting player
                 tmp_player = Player(currentPlayerName)
                 players.append(tmp_player)
+                handSize = len(p.hand)
             else:
                 players.append(p)
-        return (self.__players[self.__currentPlayer].name, players)
+        return (self.__players[self.__currentPlayer].name, players, handSize)
 
     def __getPlayer(self, currentPlayerName: str) -> Player:
         for p in self.__players:
@@ -447,10 +420,6 @@ class Game(object):
         self.__stormTokens += 1
 
     def __checkGameEnded(self):
-
-        # if len(self.getPlayers()) != self.playerEnded:
-        #     return False
-
         ended = True
         for pile in self.__tableCards:
             ended = ended and self.__checkFinishedFirework(pile)
