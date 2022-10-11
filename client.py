@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from sqlite3 import connect
 from sys import argv, stdout
 from threading import Thread
 import GameData
@@ -7,31 +8,32 @@ import socket
 from constants import *
 import os
 
-
-if len(argv) < 4:
-    print("You need the player name to start the game.")
-    #exit(-1)
-    playerName = "Test" # For debug
-    ip = HOST
-    port = PORT
-else:
-    playerName = argv[3]
-    ip = argv[1]
-    port = int(argv[2])
-
-run = True
-
-statuses = ["Lobby", "Game", "GameHint"]
-
-status = statuses[0]
-
-hintState = ("", "")
+def printHand(data: GameData.ServerGameStateData):
+    print("Current player: " + data.currentPlayer)
+    print("Player hands: ")
+    for p in data.players:
+        print(p.toClientString())
+    print("Cards in your hand: " + str(data.handSize))
+    print("Table cards: ")
+    for pos in data.tableCards:
+        print(pos + ": [ ")
+        for c in data.tableCards[pos]:
+            print(c.toClientString() + " ")
+        print("]")
+    print("Discard pile: ")
+    for c in data.discardPile:
+        print("\t" + c.toClientString())            
+    print("Note tokens used: " + str(data.usedNoteTokens) + "/8")
+    print("Storm tokens used: " + str(data.usedStormTokens) + "/3")
 
 def manageInput():
     global run
     global status
+    
+    # This loop manage the data coming from the user on the command line
     while run:
         command = input()
+
         # Choose data to send
         if command == "exit":
             run = False
@@ -84,28 +86,65 @@ def manageInput():
             continue
         stdout.flush()
 
+
+if len(argv) < 4:
+    print("You need the player name to start the game.")
+    #exit(-1)
+    playerName = "Test" # For debug
+    ip = HOST
+    port = PORT
+else:
+    playerName = argv[3]
+    ip = argv[1]
+    port = int(argv[2])
+
+run = True
+
+statuses = ["Lobby", "Game", "GameHint"]
+
+status = statuses[0]
+
+hintState = ("", "")
+
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    # Create the Request Object to be sent
     request = GameData.ClientPlayerAddData(playerName)
+
+    # Connect to the socket interface and send the connection request
     s.connect((HOST, PORT))
     s.send(request.serialize())
-    data = s.recv(DATASIZE)
-    data = GameData.GameData.deserialize(data)
-    if type(data) is GameData.ServerPlayerConnectionOk:
-        print("Connection accepted by the server. Welcome " + playerName)
+
+    # Before continuing with the operation we need to receive the ACK of connection from the server
+    connected = False
+    while not connected:
+        data = s.recv(DATASIZE) # This instruction is a blocking one
+
+        data = GameData.GameData.deserialize(data)
+
+        if type(data) is GameData.ServerPlayerConnectionOk:
+            print("Connection accepted by the server. Welcome " + playerName)
+            connected = True
+        else:
+            print("Connection to be astablished before starting communicate. Player:" + playerName)
+
     print("[" + playerName + " - " + status + "]: ", end="")
     Thread(target=manageInput).start()
+
+    # This loop manage the data coming from the server
     while run:
         dataOk = False
+
         data = s.recv(DATASIZE)
         if not data:
             continue
+
         data = GameData.GameData.deserialize(data)
         if type(data) is GameData.ServerPlayerStartRequestAccepted:
             dataOk = True
             print("Ready: " + str(data.acceptedStartRequests) + "/"  + str(data.connectedPlayers) + " players")
             data = s.recv(DATASIZE)
             data = GameData.GameData.deserialize(data)
-            
+
         if type(data) is GameData.ServerStartGameData:
             dataOk = True
             print("Game start!")
@@ -114,37 +153,27 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
         if type(data) is GameData.ServerGameStateData:
             dataOk = True
-            print("Current player: " + data.currentPlayer)
-            print("Player hands: ")
-            for p in data.players:
-                print(p.toClientString())
-            print("Cards in your hand: " + str(data.handSize))
-            print("Table cards: ")
-            for pos in data.tableCards:
-                print(pos + ": [ ")
-                for c in data.tableCards[pos]:
-                    print(c.toClientString() + " ")
-                print("]")
-            print("Discard pile: ")
-            for c in data.discardPile:
-                print("\t" + c.toClientString())            
-            print("Note tokens used: " + str(data.usedNoteTokens) + "/8")
-            print("Storm tokens used: " + str(data.usedStormTokens) + "/3")
+            printHand(data)
+            
         if type(data) is GameData.ServerActionInvalid:
             dataOk = True
             print("Invalid action performed. Reason:")
             print(data.message)
+
         if type(data) is GameData.ServerActionValid:
             dataOk = True
             print("Action valid!")
             print("Current player: " + data.player)
+
         if type(data) is GameData.ServerPlayerMoveOk:
             dataOk = True
             print("Nice move!")
             print("Current player: " + data.player)
+
         if type(data) is GameData.ServerPlayerThunderStrike:
             dataOk = True
             print("OH NO! The Gods are unhappy with you!")
+
         if type(data) is GameData.ServerHintData:
             dataOk = True
             print("Hint type: " + data.type)
@@ -154,6 +183,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         if type(data) is GameData.ServerInvalidDataReceived:
             dataOk = True
             print(data.data)
+
         if type(data) is GameData.ServerGameOver:
             dataOk = True
             print(data.message)
@@ -162,7 +192,9 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             stdout.flush()
             #run = False
             print("Ready for a new game!")
+            
         if not dataOk:
             print("Unknown or unimplemented data type: " +  str(type(data)))
         print("[" + playerName + " - " + status + "]: ", end="")
         stdout.flush()
+
