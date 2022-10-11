@@ -105,11 +105,13 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Ready: " + str(data.acceptedStartRequests) + "/"  + str(data.connectedPlayers) + " players")
             data = s.recv(DATASIZE)
             data = GameData.GameData.deserialize(data)
+            
         if type(data) is GameData.ServerStartGameData:
             dataOk = True
             print("Game start!")
             s.send(GameData.ClientPlayerReadyData(playerName).serialize())
             status = statuses[1]
+
         if type(data) is GameData.ServerGameStateData:
             dataOk = True
             print("Current player: " + data.currentPlayer)
