@@ -139,8 +139,8 @@ def manageConnections(conn: socket, addr):
 
                         if type(singleData) is dict:
                             for id in playerConnections:
-                                if type(data[id]) is GameData.UpdatePlayersStaturRequest:
-                                    playerConnections[id][0].send(data[id].serialize())
+                                if type(singleData[id]) is GameData.UpdatePlayersStaturRequest:
+                                    playerConnections[id][0].send(singleData[id].serialize())
 
                         elif singleData is not None:
                             conn.send(singleData.serialize())

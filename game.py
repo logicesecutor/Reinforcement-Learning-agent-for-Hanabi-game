@@ -242,7 +242,7 @@ class Game(object):
         res = {}
         for player in self.__players:
             currentPlayer, playerList, playerHandSize = self.__getPlayersStatus(player.name)
-            res[player.name] = GameData.ServerGameStateData(currentPlayer, playerHandSize, playerList, self.__noteTokens, self.__stormTokens, self.__tableCards, self.__discardPile)
+            res[player.name] = GameData.UpdatePlayersStaturRequest(currentPlayer, playerHandSize, playerList, self.__noteTokens, self.__stormTokens, self.__tableCards, self.__discardPile)
         
         return res
 
