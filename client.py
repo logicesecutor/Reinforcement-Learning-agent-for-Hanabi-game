@@ -99,12 +99,9 @@ else:
     port = int(argv[2])
 
 run = True
-
-statuses = ["Lobby", "Game", "GameHint"]
-
+statuses = ["Lobby", "Game"]
 status = statuses[0]
 
-hintState = ("", "")
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     # Create the Request Object to be sent
@@ -125,7 +122,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Connection accepted by the server. Welcome " + playerName)
             connected = True
         else:
-            print("Connection to be astablished before starting communicate. Player:" + playerName)
+            print("Connection have to be astablished before starting communicate with other players. Player:" + playerName)
 
     print("[" + playerName + " - " + status + "]: ", end="")
     Thread(target=manageInput).start()
@@ -135,26 +132,30 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         dataOk = False
 
         data = s.recv(DATASIZE)
-        if not data:
-            continue
-
+        if not data: continue
         data = GameData.GameData.deserialize(data)
+
+        # All players says ready to the server
         if type(data) is GameData.ServerPlayerStartRequestAccepted:
             dataOk = True
             print("Ready: " + str(data.acceptedStartRequests) + "/"  + str(data.connectedPlayers) + " players")
             data = s.recv(DATASIZE)
             data = GameData.GameData.deserialize(data)
 
+        # TODO: Send all the table and other players data each time the table status is modified 
         if type(data) is GameData.ServerStartGameData:
             dataOk = True
             print("Game start!")
             s.send(GameData.ClientPlayerReadyData(playerName).serialize())
             status = statuses[1]
 
+        # Receive the other players Hand
         if type(data) is GameData.ServerGameStateData:
             dataOk = True
             printHand(data)
-            
+        
+        # Some invalid action evaluated by the server. 
+        # Generate from "game.py" interface.
         if type(data) is GameData.ServerActionInvalid:
             dataOk = True
             print("Invalid action performed. Reason:")
@@ -165,11 +166,13 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Action valid!")
             print("Current player: " + data.player)
 
+        # Move mean that this player played a card on the table and was ok
         if type(data) is GameData.ServerPlayerMoveOk:
             dataOk = True
             print("Nice move!")
             print("Current player: " + data.player)
 
+        # Player move was not ok
         if type(data) is GameData.ServerPlayerThunderStrike:
             dataOk = True
             print("OH NO! The Gods are unhappy with you!")
@@ -197,4 +200,3 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("Unknown or unimplemented data type: " +  str(type(data)))
         print("[" + playerName + " - " + status + "]: ", end="")
         stdout.flush()
-

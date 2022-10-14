@@ -261,8 +261,7 @@ class Game(object):
         if data.destination == data.sender:
             return (GameData.ServerActionInvalid("You are giving a suggestion to yourself! Bad!"), None)
         if self.__noteTokens == self.__MAX_NOTE_TOKENS:
-            logging.warning(
-                "All the note tokens have been used. Impossible getting hints")
+            logging.warning("All the note tokens have been used. Impossible getting hints")
             return GameData.ServerActionInvalid("All the note tokens have been used"), None
         positions = []
         destPlayer: Player = None
