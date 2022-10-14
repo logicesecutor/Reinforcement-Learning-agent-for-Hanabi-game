@@ -137,7 +137,12 @@ def manageConnections(conn: socket, addr):
                     elif status == "Game":
                         singleData, multipleData = game.satisfyRequest(data, playerName)
 
-                        if singleData is not None:
+                        if type(singleData) is dict:
+                            for id in playerConnections:
+                                if type(data[id]) is GameData.UpdatePlayersStaturRequest:
+                                    playerConnections[id][0].send(data[id].serialize())
+
+                        elif singleData is not None:
                             conn.send(singleData.serialize())
                             
                         if multipleData is not None:

@@ -127,6 +127,9 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     print("[" + playerName + " - " + status + "]: ", end="")
     Thread(target=manageInput).start()
 
+    # Send the server that is ready to play after connecting and starting the inputManager thread
+    s.send(GameData.ClientPlayerStartRequest(playerName).serialize())
+
     # This loop manage the data coming from the server
     while run:
         dataOk = False

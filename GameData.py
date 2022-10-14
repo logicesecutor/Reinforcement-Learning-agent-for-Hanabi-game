@@ -149,6 +149,19 @@ class ServerPlayerConnectionOk(ServerToClientData):
         self.message = "Player " + str(playerName) + " connected succesfully!"
         super().__init__(action)
 
+
+class UpdatePlayersStaturRequest(ServerToClientData):
+    def __init__(self, currentPlayer, handSize: int, players: list, usedNoteTokens: int, usedStormTokens: int, table: list, discard: list) -> None:
+        action = "Update player Status"
+        self.currentPlayer = currentPlayer
+        self.handSize = handSize
+        self.players = players
+        self.usedNoteTokens = usedNoteTokens
+        self.usedStormTokens = usedStormTokens
+        self.tableCards = table
+        self.discardPile = discard
+        super().__init__(action)
+
 class ServerPlayerStartRequestAccepted(ServerToClientData):
     '''
     The server acknowledges you are ready.
