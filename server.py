@@ -92,6 +92,7 @@ def manageConnections(conn: socket, addr):
                                     listNames.append(player.name)
 
                                 logging.info("Game start! Between: " + str(listNames))
+                                
                                 # Send to all the players that we are starting the game
                                 for player in playerConnections:
                                     playerConnections[player][0].send(GameData.ServerStartGameData(listNames).serialize())

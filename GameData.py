@@ -150,7 +150,7 @@ class ServerPlayerConnectionOk(ServerToClientData):
         super().__init__(action)
 
 
-class UpdatePlayersStaturRequest(ServerToClientData):
+class UpdatePlayersStatusRequest(ServerToClientData):
     def __init__(self, currentPlayer, handSize: int, players: list, usedNoteTokens: int, usedStormTokens: int, table: list, discard: list) -> None:
         action = "Update player Status"
         self.currentPlayer = currentPlayer

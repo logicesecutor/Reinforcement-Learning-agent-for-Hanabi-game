@@ -8,6 +8,44 @@ import socket
 from constants import *
 import os
 
+TIME = 0
+
+class PlayerState:
+    def __init__(self, currentPlayer, handSize: int, players: list, usedNoteTokens: int, usedStormTokens: int, table: list, discard: list) -> None:
+        self.currentPlayer = currentPlayer
+        self.handSize = handSize
+        self.players = players
+        self.usedNoteTokens = usedNoteTokens
+        self.usedStormTokens = usedStormTokens
+        self.tableCards = table
+        self.discardPile = discard
+        self.myHandKnowledge = {}
+
+    def updateTableState(self, currentPlayer, handSize: int, players: list, usedNoteTokens: int, usedStormTokens: int, table: list, discard: list) -> None:
+        self.currentPlayer = currentPlayer
+        self.handSize = handSize
+        self.players = players
+        self.usedNoteTokens = usedNoteTokens
+        self.usedStormTokens = usedStormTokens
+        self.tableCards = table
+        self.discardPile = discard
+
+    def updateKnowledge(self, hint_info):
+        pass
+
+
+def updatePlayerState(data: GameData.UpdatePlayersStatusRequest or GameData.ServerHintData):
+    data_type = type(data)
+
+    if data_type is GameData.ServerHintData:
+        print("Hint type: " + data.type)
+        print("Player " + data.destination + " cards with value " + str(data.value) + " are:")
+        for i in data.positions:
+            print("\t" + str(i))
+    else:
+        pass
+
+
 def printHand(data: GameData.ServerGameStateData):
     print("Current player: " + data.currentPlayer)
     print("Player hands: ")
@@ -25,6 +63,7 @@ def printHand(data: GameData.ServerGameStateData):
         print("\t" + c.toClientString())            
     print("Note tokens used: " + str(data.usedNoteTokens) + "/8")
     print("Storm tokens used: " + str(data.usedStormTokens) + "/3")
+
 
 def manageInput():
     global run
@@ -138,60 +177,62 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         if not data: continue
         data = GameData.GameData.deserialize(data)
 
-        # All players says ready to the server
-        if type(data) is GameData.ServerPlayerStartRequestAccepted:
+        data_type = type(data)
+
+        # A player says ready to the server
+        if data_type is GameData.ServerPlayerStartRequestAccepted:
             dataOk = True
             print("Ready: " + str(data.acceptedStartRequests) + "/"  + str(data.connectedPlayers) + " players")
             data = s.recv(DATASIZE)
             data = GameData.GameData.deserialize(data)
 
-        # TODO: Send all the table and other players data each time the table status is modified 
-        if type(data) is GameData.ServerStartGameData:
+        # All players says ready to the server
+        if data_type is GameData.ServerStartGameData:
             dataOk = True
             print("Game start!")
             s.send(GameData.ClientPlayerReadyData(playerName).serialize())
             status = statuses[1]
 
         # Receive the other players Hand
-        if type(data) is GameData.ServerGameStateData:
+        if data_type is GameData.ServerGameStateData:
             dataOk = True
             printHand(data)
         
         # Some invalid action evaluated by the server. 
         # Generate from "game.py" interface.
-        if type(data) is GameData.ServerActionInvalid:
+        if data_type is GameData.ServerActionInvalid:
             dataOk = True
             print("Invalid action performed. Reason:")
             print(data.message)
 
-        if type(data) is GameData.ServerActionValid:
+        if data_type is GameData.ServerActionValid:
             dataOk = True
             print("Action valid!")
             print("Current player: " + data.player)
 
         # Move mean that this player played a card on the table and was ok
-        if type(data) is GameData.ServerPlayerMoveOk:
+        if data_type is GameData.ServerPlayerMoveOk:
             dataOk = True
             print("Nice move!")
             print("Current player: " + data.player)
 
         # Player move was not ok
-        if type(data) is GameData.ServerPlayerThunderStrike:
+        if data_type is GameData.ServerPlayerThunderStrike:
             dataOk = True
             print("OH NO! The Gods are unhappy with you!")
 
-        if type(data) is GameData.ServerHintData:
+        # Update our knowledge of the environment
+        if data_type is GameData.ServerHintData or data_type is GameData.UpdatePlayersStatusRequest:
             dataOk = True
-            print("Hint type: " + data.type)
-            print("Player " + data.destination + " cards with value " + str(data.value) + " are:")
-            for i in data.positions:
-                print("\t" + str(i))
-        if type(data) is GameData.ServerInvalidDataReceived:
+            updatePlayerState(data)
+
+
+        if data_type is GameData.ServerInvalidDataReceived:
             dataOk = True
             print(data.data)
 
         # The game is over we need to restart all the games variables 
-        if type(data) is GameData.ServerGameOver:
+        if data_type is GameData.ServerGameOver:
             dataOk = True
             print(data.message)
             print(data.score)
