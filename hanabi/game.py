@@ -168,6 +168,7 @@ class Game(object):
 
         # score
         self.__score = 0
+        
         # add actions for each class of data
         self.__dataActions[GameData.ClientPlayerDiscardCardRequest] = self.__satisfyDiscardRequest
         self.__dataActions[GameData.ClientGetGameStateRequest] = self.__satisfyShowCardRequest
