@@ -23,6 +23,9 @@ class GameManager(object):
         "white", 
         "firework" 
               ]
+    
+    # Possible Actions
+    __dataActions = {}
 
     def __init__(self) -> None:
         super().__init__()
@@ -46,7 +49,7 @@ class GameManager(object):
         self.__stormTokens = 0
 
         # Init players
-        self.__players = []
+        self.__players = {}
         self.__currentPlayer = 0
 
         # Score
@@ -69,11 +72,12 @@ class GameManager(object):
         if player.name == senderName:
             if len(player.hand) == 0:
                 return logging(f"Player {player.name}: don't have that many cards!")
+            
             card: Card = player.hand
             if not self.__discardCard(card.id, player.name):
                 logging.warning(
                     "Impossible discarding a card: there is no used token available")
-                return (GameData.ServerActionInvalid("You have no used tokens"), None)
+                return ("You have no used tokens", None)
             else:
                 self.__drawCard(player.name)
                 logging.info("Player: " + self.__getCurrentPlayer().name +
@@ -97,22 +101,30 @@ class GameManager(object):
             return False
         
         self.__noteTokens -= 1
-        endLoop = False
-        # find player
-        for p in self.__players:
-            if endLoop:
-                break
-            if p.name == playerName:
-                # find card
-                for card in p.hand:
-                    if endLoop:
-                        break
-                    if card.id == cardID:
-                        self.__discardPile.append(card)  # discard
-                        p.hand.remove(card)  # remove from hand
-                        endLoop = True
-        return True
+        player =  self.__players[playerName]
 
+        for card in player.hand:
+            if card.id == cardID:
+                self.__discardPile.append(card)  # discard
+                player.hand.remove(card)  # remove from hand
+
+        return True
+    
+
+    def __drawCard(self, playerName: str):
+        if len(self.cardsToDraw) == 0:
+            return
+        
+        player =  self.__players[playerName]
+        card = self.cardsToDraw.pop()
+
+        if player.name == playerName:
+            player.hand.append(card)
+
+    def __nextTurn(self):
+        self.__currentPlayer += 1
+        self.__currentPlayer %= len(self.__players)
+        
     def __initDeck(self):
 
         cardsList = []
