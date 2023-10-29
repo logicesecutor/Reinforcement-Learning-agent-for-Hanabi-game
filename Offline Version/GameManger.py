@@ -61,56 +61,60 @@ class GameManager(object):
         self.__dataActions["PlayerDiscard"] = self.__satisfyDiscardRequest
         self.__dataActions["GameState"] = self.__satisfyShowCardRequest
         self.__dataActions["PlayerPlayCard"] = self.__satisfyPlayCardRequest
-        self.__dataActions["Hint"] = self.__satisfyHintRequest
+    #     self.__dataActions["Hint"] = self.__satisfyHintRequest
 
 
-    # Satisfy hint request
-    def __satisfyHintRequest(self, senderName: str):
-        if self.__getCurrentPlayer().name != data.sender:
-            return ("It is not your turn yet", None)
+    # # Satisfy hint request
+    # def __satisfyHintRequest(self, senderName: str):
+    #     if self.__getCurrentPlayer().name != data.sender:
+    #         return ("It is not your turn yet", None)
         
-        if data.destination == data.sender:
-            return ("You are giving a suggestion to yourself! Bad!", None)
+    #     if data.destination == data.sender:
+    #         return ("You are giving a suggestion to yourself! Bad!", None)
         
-        if self.__noteTokens == self.__MAX_NOTE_TOKENS:
-            logging.warning("All the note tokens have been used. Impossible getting hints")
-            return ("All the note tokens have been used", None)
+    #     if self.__noteTokens == self.__MAX_NOTE_TOKENS:
+    #         logging.warning("All the note tokens have been used. Impossible getting hints")
+    #         return ("All the note tokens have been used", None)
         
-        positions = []
-        destPlayer: Player = None
-        for p in self.__players:
-            if p.name == data.destination:
-                destPlayer = p
-                break
-        if destPlayer is None:
-            return ("The selected player does not exist", None)
+    #     positions = []
+    #     destPlayer: Player = None
+    #     for p in self.__players:
+    #         if p.name == data.destination:
+    #             destPlayer = p
+    #             break
+    #     if destPlayer is None:
+    #         return ("The selected player does not exist", None)
 
-        for i in range(len(destPlayer.hand)):
-            if data.type == "color" or data.type == "colour":
-                if data.value == destPlayer.hand[i].color:
-                    positions.append(i)
-            elif data.type == "value":
-                if data.value == destPlayer.hand[i].value:
-                    positions.append(i)
-            else:
-                # Backtrack on note token
-                self.__noteTokens -= 1
-                return GameData.ServerInvalidDataReceived(data=data.type), None
-            if data.sender == data.destination:
-                self.__noteTokens -= 1
-                return GameData.ServerInvalidDataReceived(data="Sender cannot be destination!"), None
+    #     for i in range(len(destPlayer.hand)):
+    #         if data.type == "color" or data.type == "colour":
+    #             if data.value == destPlayer.hand[i].color:
+    #                 positions.append(i)
+    #         elif data.type == "value":
+    #             if data.value == destPlayer.hand[i].value:
+    #                 positions.append(i)
+    #         else:
+    #             # Backtrack on note token
+    #             self.__noteTokens -= 1
+    #             return GameData.ServerInvalidDataReceived(data=data.type), None
+    #         if data.sender == data.destination:
+    #             self.__noteTokens -= 1
+    #             return GameData.ServerInvalidDataReceived(data="Sender cannot be destination!"), None
 
-        if len(positions) == 0:
-            return GameData.ServerInvalidDataReceived(data="You cannot give hints about cards that the other person does not have"), None
-        self.__nextTurn()
-        self.__noteTokens += 1
-        logging.info("Player " + data.sender + " providing hint to " + data.destination +
-                     ": cards with " + data.type + " " + str(data.value) + " are in positions: " + str(positions))
-        # ! ADDED last param. see GameData relative comment
-        return None, GameData.ServerHintData(data.sender, data.destination, data.type, data.value, positions, self.__getCurrentPlayer().name)
+    #     if len(positions) == 0:
+    #         return GameData.ServerInvalidDataReceived(data="You cannot give hints about cards that the other person does not have"), None
+    #     self.__nextTurn()
+    #     self.__noteTokens += 1
+    #     logging.info("Player " + data.sender + " providing hint to " + data.destination +
+    #                  ": cards with " + data.type + " " + str(data.value) + " are in positions: " + str(positions))
+    #     # ! ADDED last param. see GameData relative comment
+    #     return None, GameData.ServerHintData(data.sender, data.destination, data.type, data.value, positions, self.__getCurrentPlayer().name)
 
 
-    
+    def manageInput(self):
+        player = self.__getCurrentPlayer()
+        input = input()
+
+
     # Play card request
     def __satisfyPlayCardRequest(self, senderName: str):
         player = self.__getCurrentPlayer()
@@ -156,6 +160,10 @@ class GameManager(object):
 
     def __getCurrentPlayer(self) -> Player:
         return self.__players[self.__currentPlayer]
+
+
+    def printStatus(self):
+        print(f"Current Player: {self.__getCurrentPlayer()}")
 
 
     def __satisfyDiscardRequest(self, senderName: str):
@@ -206,11 +214,11 @@ class GameManager(object):
             return False
         
         self.__noteTokens -= 1
-        player =  self.__players[playerName]
+        player : Player =  self.__players[playerName]
 
         for card in player.hand:
             if card.id == cardID:
-                self.__discardPile.append(card)  # discard
+                self.discardPile.append(card)  # discard
                 player.hand.remove(card)  # remove from hand
 
         return True
@@ -220,7 +228,7 @@ class GameManager(object):
         if len(self.cardsToDraw) == 0:
             return
         
-        player =  self.__players[playerName]
+        player : Player =  self.__players[playerName]
         card = self.cardsToDraw.pop()
 
         if player.name == playerName:
