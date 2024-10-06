@@ -2,7 +2,7 @@
 The initial idea was to build a collaborative collaborative Multi-agent Reinforcement Q-learning framework for the Hanabi game.
 This game can be modeled as a Partially Observable Markov Decision Problem(PO-MDP). So I want to build a model capable of learning in a collaborative way the best joint action in order to maximize the Game score.
 
-Then, due to my inexperience, I shrunk down the problem into an easier version. 
+I shrunk down the problem into an easier version. 
 
 ## The Basic IDEA
 
