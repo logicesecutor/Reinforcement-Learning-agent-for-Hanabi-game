@@ -1,4 +1,4 @@
-# CI_exam_project_hanabi
+# Computational Intelligence Project: Hanabi Game
 The initial idea was to build a collaborative collaborative Multi-agent Reinforcement Q-learning framework for the Hanabi game.
 This game can be modeled as a Partially Observable Markov Decision Problem(PO-MDP). So I want to build a model capable of learning in a collaborative way the best joint action to maximize the Game score.
 
